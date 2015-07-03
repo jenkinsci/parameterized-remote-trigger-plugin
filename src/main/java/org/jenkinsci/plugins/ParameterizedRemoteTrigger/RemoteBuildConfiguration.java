@@ -2,7 +2,6 @@ package org.jenkinsci.plugins.ParameterizedRemoteTrigger;
 
 import hudson.AbortException;
 import hudson.FilePath;
-import hudson.EnvVars;
 import hudson.Launcher;
 import hudson.Extension;
 import hudson.util.CopyOnWriteList;
@@ -217,8 +216,7 @@ public class RemoteBuildConfiguration extends Builder {
      * Same as "getParameterList", but removes comments and empty strings Notice that no type of character encoding is
      * happening at this step. All encoding happens in the "buildUrlQueryString" method.
      * 
-     * @param List
-     *            <String> parameters
+     * @param parameters
      * @return List<String> of build parameters
      */
     private List<String> getCleanedParameters(List<String> parameters) {
@@ -500,7 +498,7 @@ public class RemoteBuildConfiguration extends Builder {
             String preCheckUrlString = this.buildGetUrl(jobName, securityToken);
             preCheckUrlString += "/lastBuild";
             preCheckUrlString += "/api/json/";
-            JSONObject preCheckResponse = sendHTTPCall(preCheckUrlString, "GET", build, listener);
+            JSONObject preCheckResponse = sendHTTPCallAndGetJSON(preCheckUrlString, "GET", build, listener);
             
             if ( preCheckResponse != null ) {
                 // check the latest build on the remote server to see if it's running - if so wait until it has stopped.
@@ -508,7 +506,7 @@ public class RemoteBuildConfiguration extends Builder {
                 // if result is null the build hasn't finished - but might not have started running.
                 while (preCheckResponse.getBoolean("building") == true || preCheckResponse.getString("result") == null) {
                     listener.getLogger().println("Remote build is currently running - waiting for it to finish.");
-                    preCheckResponse = sendHTTPCall(preCheckUrlString, "POST", build, listener);
+                    preCheckResponse = sendHTTPCallAndGetJSON(preCheckUrlString, "POST", build, listener);
                     listener.getLogger().println("Waiting for " + this.pollInterval + " seconds until next retry.");
 
                     // Sleep for 'pollInterval' seconds.
@@ -531,15 +529,6 @@ public class RemoteBuildConfiguration extends Builder {
         String queryUrlString = this.buildGetUrl(jobName, securityToken);
         queryUrlString += "/api/json/";
 
-        //listener.getLogger().println("Getting ID of next job to build. URL: " + queryUrlString);
-        JSONObject queryResponseObject = sendHTTPCall(queryUrlString, "GET", build, listener);
-        if (queryResponseObject == null ) {
-            //This should not happen as this page should return a JSON object
-            this.failBuild(new Exception("Got a blank response from Remote Jenkins Server [" + remoteServerURL + "], cannot continue."), listener);
-        }
-        
-        int nextBuildNumber = queryResponseObject.getInt("nextBuildNumber");
-
         if (this.getOverrideAuth()) {
             listener.getLogger().println(
                     "Using job-level defined credentails in place of those from remote Jenkins config ["
@@ -547,43 +536,47 @@ public class RemoteBuildConfiguration extends Builder {
         }
 
         listener.getLogger().println("Triggering remote job now.");
-        sendHTTPCall(triggerUrlString, "POST", build, listener);
-        // Validate the build number via parameters
-        foundIt: for (int tries = 3; tries > 0; tries--) {
-            for (int buildNumber : new SearchPattern(nextBuildNumber, 2)) {
-                listener.getLogger().println("Checking parameters of #" + buildNumber);
-                String validateUrlString = this.buildGetUrl(jobName, securityToken) + "/" + buildNumber + "/api/json/";
-                JSONObject validateResponse = sendHTTPCall(validateUrlString, "GET", build, listener);
-                if (validateResponse == null) {
-                    listener.getLogger().println("Query failed.");
-                    continue;
-                }
-                JSONArray actions = validateResponse.getJSONArray("actions");
-                for (int i = 0; i < actions.size(); i++) {
-                    JSONObject action = actions.getJSONObject(i);
-                    if (!action.has("parameters")) continue;
-                    JSONArray parameters = action.getJSONArray("parameters");
-                    // Check if the parameters match
-                    if (compareParameters(listener, parameters, cleanedParams)) {
-                        // We now have a very high degree of confidence that this is the correct build.
-                        // It is still possible that this is a false positive if there are no parameters,
-                        // or multiple jobs use the same parameters.
-                        nextBuildNumber = buildNumber;
-                        break foundIt;
-                    }
-                    // This is the wrong build
-                    break;
+        String location = sendHTTPCallAndGetLocation(triggerUrlString, "POST", build, listener);
+
+        listener.getLogger().println("Job scheduled in location: " + location);
+
+        int nextBuildNumber = 0;
+
+
+        do
+        {
+            JSONObject responseObj = sendHTTPCallAndGetJSON(location + "/api/json", "GET", build, listener);
+
+            JSONObject executable = responseObj.getJSONObject("executable");
+
+            if ((executable != null) && (!executable.isNullObject()) && (executable.get("number") != null)) {
+                nextBuildNumber = executable.getInt("number");
+                break;
+            } else
+            {
+                //Don't sleep longer than a minute for this step, as the queue item is only valid for 5 minutes.
+                //See https://issues.jenkins-ci.org/browse/JENKINS-26228
+                listener.getLogger().println("Waiting for remote build to start.");
+                if(this.pollInterval > 60)
+                {
+                    listener.getLogger().println("Waiting for 60 seconds before polling again, unfortunately this step needs to be more frequent than you requested. See https://issues.jenkins-ci.org/browse/JENKINS-26228 as to why.");
+                } else
+                {
+                    listener.getLogger().println("Waiting for " + this.pollInterval + " seconds until next poll.");
                 }
 
-                // Sleep for 'pollInterval' seconds.
-                // Sleep takes miliseconds so need to convert this.pollInterval to milisecopnds (x 1000)
                 try {
-                    Thread.sleep(this.pollInterval * 1000);
-                } catch (InterruptedException e) {
+                    Thread.sleep(Math.min(this.pollInterval, 60) * 1000);
+                } catch(InterruptedException e)
+                {
                     this.failBuild(e, listener);
                 }
             }
-        }
+
+        } while(true);
+
+
+
         listener.getLogger().println("This job is build #[" + Integer.toString(nextBuildNumber) + "] on the remote server.");
         BuildInfoExporterAction.addBuildInfoExporterAction(build, jobName, nextBuildNumber, Result.NOT_BUILT);
         
@@ -722,7 +715,7 @@ public class RemoteBuildConfiguration extends Builder {
                             + this.getRemoteJenkinsName() + "]");
         }
 
-        JSONObject responseObject = sendHTTPCall(buildUrlString, "GET", build, listener);
+        JSONObject responseObject = sendHTTPCallAndGetJSON(buildUrlString, "GET", build, listener);
 
         // get the next build from the location
 
@@ -761,7 +754,7 @@ public class RemoteBuildConfiguration extends Builder {
                             + this.getRemoteJenkinsName() + "]");
         }
 
-        JSONObject responseObject = sendHTTPCall(buildUrlString, "GET", build, listener);
+        JSONObject responseObject = sendHTTPCallAndGetJSON(buildUrlString, "GET", build, listener);
 
         // get the next build from the location
 
@@ -779,24 +772,7 @@ public class RemoteBuildConfiguration extends Builder {
     public String getConsoleOutput(String urlString, String requestType, AbstractBuild build, BuildListener listener)
             throws IOException {
         
-            return getConsoleOutput( urlString, requestType, build, listener, 1 );
-    }
-
-    /**
-     * Orchestrates all calls to the remote server.
-     * Also takes care of any credentials or failed-connection retries.
-     * 
-     * @param urlString     the URL that needs to be called
-     * @param requestType   the type of request (GET, POST, etc)
-     * @param build         the build that is being triggered
-     * @param listener      build listener
-     * @return              a valid JSON object, or null
-     * @throws IOException
-     */
-    public JSONObject sendHTTPCall(String urlString, String requestType, AbstractBuild build, BuildListener listener)
-            throws IOException {
-        
-            return sendHTTPCall( urlString, requestType, build, listener, 1 );
+            return getConsoleOutput(urlString, requestType, build, listener, 1);
     }
 
     public String getConsoleOutput(String urlString, String requestType, AbstractBuild build, BuildListener listener, int numberOfAttempts)
@@ -869,7 +845,7 @@ public class RemoteBuildConfiguration extends Builder {
 
             consoleOutput = response.toString();
         } catch (IOException e) {
-            
+            listener.getLogger().println(e.getMessage());
             //If we have connectionRetryLimit set to > 0 then retry that many times.
             if( numberOfAttempts <= retryLimit) {
                 listener.getLogger().println("Connection to remote server failed, waiting for to retry - " + this.pollInterval + " seconds until next attempt.");
@@ -911,17 +887,88 @@ public class RemoteBuildConfiguration extends Builder {
     }
 
     /**
-     * Same as sendHTTPCall, but keeps track of the number of failed connection attempts (aka: the number of times this
-     * method has been called).
+     * Sends a request to the server and retrieves the HTTP Field Location response
+     * This is primarily useful to determine what build we queued
+     *
+     * @return HTTP Header Location Value
+     */
+    public String sendHTTPCallAndGetLocation(String urlString, String requestType, AbstractBuild build, final BuildListener listener)
+            throws IOException {
+        ProcessHTTPResponse<String> processHTTPResponse = new ProcessHTTPResponse<String>() {
+            public String getResponse(HttpURLConnection connection) throws IOException {
+                String location = connection.getHeaderField("Location");
+                if(location == null)
+                {
+                    throw new IOException("No location retrieved from server");
+                } else
+                {
+                    return location;
+                }
+            }
+        };
+        return sendHTTPCallAndProcessResponse(urlString,requestType,build,listener,1,60, processHTTPResponse);
+    }
+
+    /**
+     *
      * In the case of a failed connection, the method calls it self recursively and increments  numberOfAttempts
-     * 
-     * @see sendHTTPCall
-     * @param numberOfAttempts  number of time that the connection has been attempted
+     *
+     * @return JSONObject
+     * @throws IOException
+     */
+    public JSONObject sendHTTPCallAndGetJSON(String urlString, String requestType, AbstractBuild build, final BuildListener listener)
+            throws IOException {
+        ProcessHTTPResponse<JSONObject> processJSONObject = new ProcessHTTPResponse<JSONObject>() {
+            public JSONObject getResponse(HttpURLConnection connection) throws IOException {
+                InputStream is;
+                try {
+                    is = connection.getInputStream();
+                } catch (FileNotFoundException e) {
+                    // In case of a e.g. 404 status
+                    is = connection.getErrorStream();
+                }
+
+                BufferedReader rd = new BufferedReader(new InputStreamReader(is));
+                String line;
+                // String response = "";
+                StringBuilder response = new StringBuilder();
+
+                while ((line = rd.readLine()) != null) {
+                    response.append(line);
+                }
+                rd.close();
+
+                // JSONSerializer serializer = new JSONSerializer();
+                // need to parse the data we get back into struct
+                //listener.getLogger().println("Called URL: '" + urlString +  "', got response: '" + response.toString() + "'");
+
+                //Solving issue reported in this comment: https://github.com/jenkinsci/parameterized-remote-trigger-plugin/pull/3#issuecomment-39369194
+                //Seems like in Jenkins version 1.547, when using "/build" (job API for non-parameterized jobs), it returns a string indicating the status.
+                //But in newer versions of Jenkins, it just returns an empty response.
+                //So we need to compensate and check for both.
+                if (JSONUtils.mayBeJSON(response.toString()) == false) {
+                    listener.getLogger().println("Remote Jenkins server returned empty response or invalid JSON - but we can still proceed with the remote build.");
+                    return null;
+                } else {
+                    return (JSONObject) JSONSerializer.toJSON(response.toString());
+                }
+
+            }
+        };
+
+        return sendHTTPCallAndProcessResponse(urlString, requestType, build, listener, 1, this.pollInterval, processJSONObject);
+    }
+
+    /**
+     * Process the HTTP call and then uses the supplied delegate (or strategy) to determine what we want from the HTTP call.
+     *
+     * @param <T>
      * @return
      * @throws IOException
      */
-    public JSONObject sendHTTPCall(String urlString, String requestType, AbstractBuild build, BuildListener listener, int numberOfAttempts)
-            throws IOException {
+    private <T> T sendHTTPCallAndProcessResponse(String urlString, String requestType, AbstractBuild build, BuildListener listener, int numberOfAttempts, int pollInterval, ProcessHTTPResponse<T> httpProcessor)  throws IOException
+    {
+
         RemoteJenkinsServer remoteServer = this.findRemoteHost(this.getRemoteJenkinsName());
         int retryLimit = this.getConnectionRetryLimit();
         
@@ -932,7 +979,7 @@ public class RemoteBuildConfiguration extends Builder {
 
         HttpURLConnection connection = null;
 
-        JSONObject responseObject = null;
+
 
             URL buildUrl = new URL(urlString);
             connection = (HttpURLConnection) buildUrl.openConnection();
@@ -968,52 +1015,30 @@ public class RemoteBuildConfiguration extends Builder {
             // wait up to 5 seconds for the connection to be open
             connection.setConnectTimeout(5000);
             connection.connect();
-            
-            InputStream is;
-            try {
-                is = connection.getInputStream();
-            } catch (FileNotFoundException e) {
-                // In case of a e.g. 404 status
-                is = connection.getErrorStream();
-            }
-            
-            BufferedReader rd = new BufferedReader(new InputStreamReader(is));
-            String line;
-            // String response = "";
-            StringBuilder response = new StringBuilder();
-        
-            while ((line = rd.readLine()) != null) {
-                response.append(line);
-            }
-            rd.close();
-            
-            // JSONSerializer serializer = new JSONSerializer();
-            // need to parse the data we get back into struct
-            //listener.getLogger().println("Called URL: '" + urlString +  "', got response: '" + response.toString() + "'");
 
-            //Solving issue reported in this comment: https://github.com/jenkinsci/parameterized-remote-trigger-plugin/pull/3#issuecomment-39369194
-            //Seems like in Jenkins version 1.547, when using "/build" (job API for non-parameterized jobs), it returns a string indicating the status.
-            //But in newer versions of Jenkins, it just returns an empty response.
-            //So we need to compensate and check for both.
-            if ( JSONUtils.mayBeJSON(response.toString()) == false) {
-                listener.getLogger().println("Remote Jenkins server returned empty response or invalid JSON - but we can still proceed with the remote build.");
-                return null;
-            } else {
-                responseObject = (JSONObject) JSONSerializer.toJSON(response.toString());
+            int responseCode = connection.getResponseCode();
+
+            if(responseCode == 404)
+            {
+                // I am too lazy to figure out why 404 errors don't get displayed to the user properly, all other errors do.
+                // I did try and remove the catching of the FileNotFoundException but that still didn't make it clear.
+                listener.getLogger().println("Recieved HTTP Message 404 from server. Please check that the job or build still exists. Request:" + connection.getURL().toString() );
             }
+
+            return httpProcessor.getResponse(connection);
 
         } catch (IOException e) {
             listener.getLogger().println(e.getMessage());
             //If we have connectionRetryLimit set to > 0 then retry that many times.
             if( numberOfAttempts <= retryLimit) {
-                listener.getLogger().println("Connection to remote server failed, waiting for to retry - " + this.pollInterval + " seconds until next attempt.");
+                listener.getLogger().println("Connection to remote server failed, waiting for to retry - " + pollInterval + " seconds until next attempt.");
                 e.printStackTrace();
                 
                 // Sleep for 'pollInterval' seconds.
                 // Sleep takes miliseconds so need to convert this.pollInterval to milisecopnds (x 1000)
                 try {
                     // Could do with a better way of sleeping...
-                    Thread.sleep(this.pollInterval * 1000);
+                    Thread.sleep(pollInterval * 1000);
                 } catch (InterruptedException ex) {
                     this.failBuild(ex, listener);
                 }
@@ -1021,7 +1046,7 @@ public class RemoteBuildConfiguration extends Builder {
  
                 listener.getLogger().println("Retry attempt #" + numberOfAttempts + " out of " + retryLimit );
                 numberOfAttempts++;
-                responseObject = sendHTTPCall(urlString, requestType, build, listener, numberOfAttempts);
+                return sendHTTPCallAndProcessResponse(urlString, requestType, build, listener, numberOfAttempts, pollInterval, httpProcessor);
             }else if(numberOfAttempts > retryLimit){
                 //reached the maximum number of retries, time to fail
                 this.failBuild(new Exception("Max number of connection retries have been exeeded."), listener);
@@ -1041,7 +1066,7 @@ public class RemoteBuildConfiguration extends Builder {
             // this.listener = null;
 
         }
-        return responseObject;
+        return null;
     }
 
     /**
@@ -1162,7 +1187,7 @@ public class RemoteBuildConfiguration extends Builder {
         remoteServerUrl += "/api/json";
         
         try {
-            JSONObject response = sendHTTPCall(remoteServerUrl, "GET", build, listener);
+            JSONObject response = sendHTTPCallAndGetJSON(remoteServerUrl, "GET", build, listener);
 
             if(response.getJSONArray("actions").size() >= 1){
                 isParameterized = true;
@@ -1288,5 +1313,15 @@ v         */
         public void setRemoteSites(RemoteJenkinsServer... remoteSites) {
             this.remoteSites.replaceBy(remoteSites);
         }
+    }
+
+    private interface ProcessHTTPResponse<T>{
+        /**
+         * Retrieves the object T
+         * @param connection
+         * @throws IOException if there is a problem
+         * @return
+         */
+        public T getResponse(HttpURLConnection connection) throws IOException;
     }
 }
