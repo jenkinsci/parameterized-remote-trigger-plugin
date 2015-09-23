@@ -448,12 +448,18 @@ public class RemoteBuildConfiguration extends Builder {
      */
     private void failBuild(Exception e, BuildListener listener) throws IOException {
         System.out.print(e.getStackTrace());
-        if (this.getShouldNotFailBuild()) {
+        if (this.getShouldNotFailBuild() && !(e instanceof InterruptedException)) {
             listener.error("Remote build failed for the following reason, but the build will continue:");
             listener.error(e.getMessage());
         } else {
-            listener.error("Remote build failed for the following reason:");
-            throw new AbortException(e.getMessage());
+            if(e instanceof InterruptedException){
+                listener.error("Build cancelled by user");
+                throw new AbortException("Build cancelled by user");
+            } else
+            {
+                listener.error("Remote build failed for the following reason:");
+                throw new AbortException(e.getMessage());
+            }
         }
     }
 
@@ -778,8 +784,8 @@ public class RemoteBuildConfiguration extends Builder {
 
     public String getConsoleOutput(String urlString, String requestType, AbstractBuild build, BuildListener listener)
             throws IOException {
-        
-            return getConsoleOutput( urlString, requestType, build, listener, 1 );
+
+        return getConsoleOutput( urlString, requestType, build, listener, 1 );
     }
 
     /**
