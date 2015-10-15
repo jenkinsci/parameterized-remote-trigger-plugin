@@ -692,6 +692,10 @@ public class RemoteBuildConfiguration extends Builder {
                 continue;
             }
 
+            // for password parameters, the value is not returned
+            if (!parameter.has("value")) {
+                continue;
+            }
             String value = parameter.getString("value");
             // If we got the expected value, skip to the next parameter
             if (expected.equals(value)) continue;
