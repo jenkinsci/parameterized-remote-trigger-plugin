@@ -383,11 +383,11 @@ public class RemoteBuildConfiguration extends Builder {
             triggerUrlString += buildTokenRootUrl;
             triggerUrlString += getBuildTypeUrl(isRemoteJobParameterized);
 
-            this.addToQueryString("job=" + this.encodeValue(job));
+            this.addToQueryString("job=" + this.encodeValue(job)); // works w/o generateJobPath()ing
 
         } else {
             triggerUrlString += "/job/";
-            triggerUrlString += this.encodeValue(job);
+            triggerUrlString += this.generateJobPath(job);
             triggerUrlString += getBuildTypeUrl(isRemoteJobParameterized);
         }
 
@@ -428,7 +428,7 @@ public class RemoteBuildConfiguration extends Builder {
         String urlString = remoteServer.getAddress().toString();
 
         urlString += "/job/";
-        urlString += this.encodeValue(job);
+        urlString += this.generateJobPath(job);
 
         // don't try to include a security token in the URL if none is provided
         if (!securityToken.equals("")) {
@@ -588,7 +588,7 @@ public class RemoteBuildConfiguration extends Builder {
         BuildInfoExporterAction.addBuildInfoExporterAction(build, jobName, nextBuildNumber, Result.NOT_BUILT);
         
         //Have to form the string ourselves, as we might not get a response from non-parameterized builds
-        String jobURL = remoteServerURL + "/job/" + this.encodeValue(jobName) + "/";
+        String jobURL = remoteServerURL + "/job/" + this.generateJobPath(jobName) + "/";
 
         // This is only for Debug
         // This output whether there is another job running on the remote host that this job had conflicted with.
@@ -1063,6 +1063,18 @@ public class RemoteBuildConfiguration extends Builder {
         return cleanValue;
     }
 
+    /**
+     * Helper function for generating a job path
+     */
+    private String generateJobPath(String jobName) {
+        String[] parts = jobName.split("/");
+        String[] encodedParts = new String[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            encodedParts[i] = this.encodeValue(parts[i]);
+        }
+        return StringUtils.join(encodedParts, "/job/");
+    }
+
     // Getters
     public String getRemoteJenkinsName() {
         return this.remoteJenkinsName;
@@ -1158,7 +1170,7 @@ public class RemoteBuildConfiguration extends Builder {
         //build the proper URL to inspect the remote job
         RemoteJenkinsServer remoteServer = this.findRemoteHost(this.getRemoteJenkinsName());
         String remoteServerUrl = remoteServer.getAddress().toString();
-        remoteServerUrl += "/job/" + encodeValue(jobName);
+        remoteServerUrl += "/job/" + generateJobPath(jobName);
         remoteServerUrl += "/api/json";
         
         try {
