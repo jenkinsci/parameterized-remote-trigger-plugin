@@ -1,9 +1,9 @@
 package org.jenkinsci.plugins.ParameterizedRemoteTrigger;
 
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URL;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.net.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,6 +18,9 @@ import hudson.model.Descriptor;
 import hudson.util.CopyOnWriteList;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
+
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLHandshakeException;
 
 /**
  * Holds everything regarding the remote server we wish to connect to, including validations and what not.
@@ -131,21 +134,46 @@ public class RemoteJenkinsServer extends AbstractDescribableImpl<RemoteJenkinsSe
                 return FormValidation.error("The remote address can not be left empty.");
             }
 
+            URI uri;
             // check if we have a valid, well-formed URL
             try {
                 host = new URL(address);
-                URI uri = host.toURI();
+                uri = host.toURI();
             } catch (Exception e) {
                 return FormValidation.error("Malformed address (" + address + "), please double-check it.");
             }
 
             // check that the host is reachable
+            int connectionTimeoutInSeconds = 5;
+
             try {
                 HttpURLConnection connection = (HttpURLConnection) host.openConnection();
-                connection.setConnectTimeout(5000);
+                connection.setConnectTimeout(connectionTimeoutInSeconds * 1000);
                 connection.connect();
-            } catch (Exception e) {
-                return FormValidation.warning("Address looks good, but we were not able to connect to it");
+
+            } catch(SSLException e){
+                e.printStackTrace();
+                return FormValidation.warning("Could not negotiate SSL Connection. Exception raised: " + e.getClass().getCanonicalName() + " with message: " + e.getMessage());
+            } catch(SocketTimeoutException e) {
+                e.printStackTrace();
+                return FormValidation.warning("Could not connect to server within " + connectionTimeoutInSeconds + " seconds, connection timed out.");
+            } catch(UnknownHostException e)
+            {
+                e.printStackTrace();
+                return FormValidation.warning("Could not resolve hostname: " + uri.getHost() );
+            } catch (IOException e)
+            {
+                e.printStackTrace();
+                return FormValidation.warning("Address looks good, but we were not able to connect to it. Exception:" + e.getClass() +  " Message: " + e.getMessage());
+            } catch(Exception e)
+            {
+                // The old version of the code captured runtime exceptions like this
+                // I am not sure if this is best, but I will do the same here.
+                e.printStackTrace();
+                StringWriter sw = new StringWriter();
+                PrintWriter pw = new PrintWriter(sw);
+                e.printStackTrace(pw);
+                return FormValidation.error("An unexpected occurred: " + e.getClass() +  " Message: "  + e.getMessage() + "\n Stack Trace:" + sw.toString() );
             }
 
             return FormValidation.okWithMarkup("Address looks good");
