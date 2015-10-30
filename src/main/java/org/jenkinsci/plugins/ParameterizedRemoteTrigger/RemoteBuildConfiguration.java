@@ -551,6 +551,14 @@ public class RemoteBuildConfiguration extends Builder {
         // Validate the build number via parameters
         foundIt: for (int tries = 3; tries > 0; tries--) {
             for (int buildNumber : new SearchPattern(nextBuildNumber, 2)) {
+                // Sleep for 'pollInterval' seconds.
+                // Sleep takes miliseconds so need to convert this.pollInterval to seconds (x 1000)
+                try {
+                    Thread.sleep(this.pollInterval * 1000);
+                } catch (InterruptedException e) {
+                    this.failBuild(e, listener);
+                }
+
                 listener.getLogger().println("Checking parameters of #" + buildNumber);
                 String validateUrlString = this.buildGetUrl(jobName, securityToken) + "/" + buildNumber + "/api/json/";
                 JSONObject validateResponse = sendHTTPCall(validateUrlString, "GET", build, listener);
@@ -573,14 +581,6 @@ public class RemoteBuildConfiguration extends Builder {
                     }
                     // This is the wrong build
                     break;
-                }
-
-                // Sleep for 'pollInterval' seconds.
-                // Sleep takes miliseconds so need to convert this.pollInterval to milisecopnds (x 1000)
-                try {
-                    Thread.sleep(this.pollInterval * 1000);
-                } catch (InterruptedException e) {
-                    this.failBuild(e, listener);
                 }
             }
         }
