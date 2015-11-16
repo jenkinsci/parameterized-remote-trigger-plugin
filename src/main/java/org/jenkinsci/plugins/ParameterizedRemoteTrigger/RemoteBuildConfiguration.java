@@ -1172,6 +1172,7 @@ public class RemoteBuildConfiguration extends Builder {
                     JSONObject action = actions.getJSONObject(i);
                     if(action.size() > 0) {
                         isParameterized = true;
+                        break;
                     }
                 }
             }
