@@ -1164,8 +1164,17 @@ public class RemoteBuildConfiguration extends Builder {
         try {
             JSONObject response = sendHTTPCall(remoteServerUrl, "GET", build, listener);
 
-            if(response.getJSONArray("actions").size() >= 1){
-                isParameterized = true;
+            JSONArray actions = response.getJSONArray("actions");
+            if(actions.size() >= 1) {
+                // Jenkins often returns a lot of empty action objects. Make sure
+                // that at least one action object has some key-value-pairs in it.
+                for(int i = 0; i < actions.size(); i++) {
+                    JSONObject action = actions.getJSONObject(i);
+                    if(action.size() > 0) {
+                        isParameterized = true;
+                        break;
+                    }
+                }
             }
             
         } catch (IOException e) {
