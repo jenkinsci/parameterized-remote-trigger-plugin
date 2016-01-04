@@ -4,6 +4,7 @@ import hudson.EnvVars;
 import hudson.model.EnvironmentContributingAction;
 import hudson.model.Result;
 import hudson.model.AbstractBuild;
+import hudson.model.Run;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -22,14 +23,14 @@ class BuildInfoExporterAction implements EnvironmentContributingAction {
 
     private List<BuildReference> builds;
 
-    public BuildInfoExporterAction(AbstractBuild<?, ?> parentBuild, BuildReference buildRef) {
+    public BuildInfoExporterAction(Run<?, ?> parentBuild, BuildReference buildRef) {
         super();
 
         this.builds = new ArrayList<BuildReference>();
         this.builds.add(buildRef);
     }
 
-    static BuildInfoExporterAction addBuildInfoExporterAction(AbstractBuild<?, ?> parentBuild, String triggeredProject, int buildNumber, Result buildResult) {
+    static BuildInfoExporterAction addBuildInfoExporterAction(Run<?, ?> parentBuild, String triggeredProject, int buildNumber, Result buildResult) {
         BuildReference reference = new BuildReference(triggeredProject, buildNumber, buildResult);
 
         BuildInfoExporterAction action = parentBuild.getAction(BuildInfoExporterAction.class);

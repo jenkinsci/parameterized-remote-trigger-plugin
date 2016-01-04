@@ -5,14 +5,16 @@ import hudson.FilePath;
 import hudson.EnvVars;
 import hudson.Launcher;
 import hudson.Extension;
+import hudson.model.Run;
+import hudson.model.TaskListener;
 import hudson.util.CopyOnWriteList;
 import hudson.util.ListBoxModel;
 import hudson.model.AbstractBuild;
-import hudson.model.BuildListener;
 import hudson.model.Result;
 import hudson.model.AbstractProject;
 import hudson.tasks.Builder;
 import hudson.tasks.BuildStepDescriptor;
+import jenkins.tasks.SimpleBuildStep;
 import net.sf.json.JSONObject;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONSerializer;
@@ -45,12 +47,14 @@ import java.util.List;
 
 import org.apache.commons.codec.binary.Base64;
 
+import javax.annotation.Nonnull;
+
 /**
  * 
  * @author Maurice W.
  * 
  */
-public class RemoteBuildConfiguration extends Builder {
+public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep {
 
     private final String          token;
     private final String          remoteJenkinsName;
@@ -157,11 +161,11 @@ public class RemoteBuildConfiguration extends Builder {
      * ```getCleanedParameters``` before returning.
      * 
      * @param build
+     * @param workspace
      * @return List<String> of build parameters
      */
-    private List<String> loadExternalParameterFile(AbstractBuild<?, ?> build) {
+    private List<String> loadExternalParameterFile(Run<?, ?> build, FilePath workspace) {
 
-        FilePath workspace = build.getWorkspace();
         BufferedReader br = null;
         List<String> ParameterList = new ArrayList<String>();
         try {
@@ -237,7 +241,7 @@ public class RemoteBuildConfiguration extends Builder {
      *            List<String> of params to be tokenized/replaced
      * @return List<String> of resolved variables/tokens
      */
-    private List<String> replaceTokens(AbstractBuild<?, ?> build, BuildListener listener, List<String> params) {
+    private List<String> replaceTokens(Run<?, ?> build, TaskListener listener, List<String> params) {
         List<String> tokenizedParams = new ArrayList<String>();
 
         for (int i = 0; i < params.size(); i++) {
@@ -257,9 +261,11 @@ public class RemoteBuildConfiguration extends Builder {
      *            String to be tokenized/replaced
      * @return String with resolved Environment variables
      */
-    private String replaceToken(AbstractBuild<?, ?> build, BuildListener listener, String input) {
+    private String replaceToken(Run<?, ?> build, TaskListener listener, String input) {
         try {
-            return TokenMacro.expandAll(build, listener, input);
+            if (build instanceof AbstractBuild) {
+                return TokenMacro.expandAll((AbstractBuild)build, listener, input);
+            }
         } catch (Exception e) {
             listener.getLogger().println(
                     String.format("Failed to resolve parameters in string %s due to following error:\n%s", input,
@@ -443,10 +449,10 @@ public class RemoteBuildConfiguration extends Builder {
      * @param e
      *            Exception that caused the build to fail
      * @param listener
-     *            Build Listener
+     *            Task Listener
      * @throws IOException
      */
-    private void failBuild(Exception e, BuildListener listener) throws IOException {
+    private void failBuild(Exception e, TaskListener listener) throws IOException {
         System.out.print(e.getStackTrace());
         if (this.getShouldNotFailBuild()) {
             listener.error("Remote build failed for the following reason, but the build will continue:");
@@ -458,9 +464,7 @@ public class RemoteBuildConfiguration extends Builder {
     }
 
     @Override
-    public boolean perform(AbstractBuild build, Launcher launcher, BuildListener listener) throws InterruptedException,
-            IOException, IllegalArgumentException {
-
+    public void perform(@Nonnull Run<?, ?> build, FilePath workspace, @Nonnull Launcher launcher, @Nonnull TaskListener listener) throws InterruptedException, IOException {
         RemoteJenkinsServer remoteServer = this.findRemoteHost(this.getRemoteJenkinsName());
 
         // Stores the status of the remote build
@@ -468,13 +472,13 @@ public class RemoteBuildConfiguration extends Builder {
 
         if (remoteServer == null) {
             this.failBuild(new Exception("No remote host is defined for this job."), listener);
-            return true;
+            return;
         }
         String remoteServerURL = remoteServer.getAddress().toString();
         List<String> cleanedParams = null;
 
-        if (this.getLoadParamsFromFile()) {
-            cleanedParams = loadExternalParameterFile(build);
+        if (this.getLoadParamsFromFile() && workspace != null) {
+            cleanedParams = loadExternalParameterFile(build, workspace);
         } else {
             // tokenize all variables and encode all variables, then build the fully-qualified trigger URL
             cleanedParams = getCleanedParameters();
@@ -668,7 +672,7 @@ public class RemoteBuildConfiguration extends Builder {
             listener.getLogger().println("Not blocking local job until remote job completes - fire and forget.");
         }
 
-        return true;
+        return;
     }
 
     private String findParameter(String parameter, List<String> parameters) {
@@ -680,7 +684,7 @@ public class RemoteBuildConfiguration extends Builder {
         return null;
     }
 
-    private boolean compareParameters(BuildListener listener, JSONArray parameters, List<String> expectedParams) {
+    private boolean compareParameters(TaskListener listener, JSONArray parameters, List<String> expectedParams) {
         for (int j = 0; j < parameters.size(); j++) {
             JSONObject parameter = parameters.getJSONObject(j);
             String name = parameter.getString("name");
@@ -704,7 +708,7 @@ public class RemoteBuildConfiguration extends Builder {
         return true;
     }
 
-    public String getBuildStatus(String buildUrlString, AbstractBuild build, BuildListener listener) throws IOException {
+    public String getBuildStatus(String buildUrlString, Run<?, ?> build, TaskListener listener) throws IOException {
         String buildStatus = "UNKNOWN";
 
         RemoteJenkinsServer remoteServer = this.findRemoteHost(this.getRemoteJenkinsName());
@@ -743,7 +747,7 @@ public class RemoteBuildConfiguration extends Builder {
         return buildStatus;
     }
 
-    public String getBuildUrl(String buildUrlString, AbstractBuild build, BuildListener listener) throws IOException {
+    public String getBuildUrl(String buildUrlString, Run build, TaskListener listener) throws IOException {
         String buildUrl = "";
 
         RemoteJenkinsServer remoteServer = this.findRemoteHost(this.getRemoteJenkinsName());
@@ -776,7 +780,7 @@ public class RemoteBuildConfiguration extends Builder {
         return buildUrl;
     }
 
-    public String getConsoleOutput(String urlString, String requestType, AbstractBuild build, BuildListener listener)
+    public String getConsoleOutput(String urlString, String requestType, Run<?, ?> build, TaskListener listener)
             throws IOException {
         
             return getConsoleOutput( urlString, requestType, build, listener, 1 );
@@ -789,17 +793,17 @@ public class RemoteBuildConfiguration extends Builder {
      * @param urlString     the URL that needs to be called
      * @param requestType   the type of request (GET, POST, etc)
      * @param build         the build that is being triggered
-     * @param listener      build listener
+     * @param listener      task listener
      * @return              a valid JSON object, or null
      * @throws IOException
      */
-    public JSONObject sendHTTPCall(String urlString, String requestType, AbstractBuild build, BuildListener listener)
+    public JSONObject sendHTTPCall(String urlString, String requestType, Run<?, ?> build, TaskListener listener)
             throws IOException {
         
             return sendHTTPCall( urlString, requestType, build, listener, 1 );
     }
 
-    public String getConsoleOutput(String urlString, String requestType, AbstractBuild build, BuildListener listener, int numberOfAttempts)
+    public String getConsoleOutput(String urlString, String requestType, Run<?, ?> build, TaskListener listener, int numberOfAttempts)
             throws IOException {
         RemoteJenkinsServer remoteServer = this.findRemoteHost(this.getRemoteJenkinsName());
         int retryLimit = this.getConnectionRetryLimit();
@@ -828,12 +832,14 @@ public class RemoteBuildConfiguration extends Builder {
 
         if (!usernameTokenConcat.equals(":")) {
             // token-macro replacment
-            try {
-                usernameTokenConcat = TokenMacro.expandAll(build, listener, usernameTokenConcat);
-            } catch (MacroEvaluationException e) {
-                this.failBuild(e, listener);
-            } catch (InterruptedException e) {
-                this.failBuild(e, listener);
+            if (build instanceof AbstractBuild) {
+                try {
+                    usernameTokenConcat = TokenMacro.expandAll((AbstractBuild)build, listener, usernameTokenConcat);
+                } catch (MacroEvaluationException e) {
+                    this.failBuild(e, listener);
+                } catch (InterruptedException e) {
+                    this.failBuild(e, listener);
+                }
             }
 
             byte[] encodedAuthKey = Base64.encodeBase64(usernameTokenConcat.getBytes());
@@ -920,7 +926,7 @@ public class RemoteBuildConfiguration extends Builder {
      * @return
      * @throws IOException
      */
-    public JSONObject sendHTTPCall(String urlString, String requestType, AbstractBuild build, BuildListener listener, int numberOfAttempts)
+    public JSONObject sendHTTPCall(String urlString, String requestType, Run<?, ?> build, TaskListener listener, int numberOfAttempts)
             throws IOException {
         RemoteJenkinsServer remoteServer = this.findRemoteHost(this.getRemoteJenkinsName());
         int retryLimit = this.getConnectionRetryLimit();
@@ -949,12 +955,14 @@ public class RemoteBuildConfiguration extends Builder {
 
             if (!usernameTokenConcat.equals(":")) {
                 // token-macro replacment
-                try {
-                    usernameTokenConcat = TokenMacro.expandAll(build, listener, usernameTokenConcat);
-                } catch (MacroEvaluationException e) {
-                    this.failBuild(e, listener);
-                } catch (InterruptedException e) {
-                    this.failBuild(e, listener);
+                if (build instanceof AbstractBuild) {
+                    try {
+                        usernameTokenConcat = TokenMacro.expandAll((AbstractBuild)build, listener, usernameTokenConcat);
+                    } catch (MacroEvaluationException e) {
+                        this.failBuild(e, listener);
+                    } catch (InterruptedException e) {
+                        this.failBuild(e, listener);
+                    }
                 }
 
                 byte[] encodedAuthKey = Base64.encodeBase64(usernameTokenConcat.getBytes());
@@ -1148,11 +1156,11 @@ public class RemoteBuildConfiguration extends Builder {
      * Pokes the remote server to see if it has default parameters defined or not.
      * 
      * @param jobName Name of the remote job to test
-     * @param build Build object
-     * @param listener listner object
+     * @param build Run object
+     * @param listener listener object
      * @return true if the remote job has default parameters set, otherwise false
      */
-    private boolean isRemoteJobParameterized(String jobName, AbstractBuild build, BuildListener listener) {
+    private boolean isRemoteJobParameterized(String jobName, Run<?, ?> build, TaskListener listener) {
         boolean isParameterized = false;
         
         //build the proper URL to inspect the remote job
