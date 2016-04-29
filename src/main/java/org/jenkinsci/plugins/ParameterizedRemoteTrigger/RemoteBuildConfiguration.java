@@ -929,14 +929,17 @@ public class RemoteBuildConfiguration extends Builder {
             this.failBuild(new Exception("No remote host is defined for this job."), listener);
             return null;
         }
-
         HttpURLConnection connection = null;
 
         JSONObject responseObject = null;
 
             URL buildUrl = new URL(urlString);
             connection = (HttpURLConnection) buildUrl.openConnection();
-
+            if(remoteServer.hasCrumbSupport() && requestType.equals("POST")){
+                String crumbUrl=remoteServer.getAddress()+"/crumbIssuer/api/json";
+                JSONObject crumb = sendHTTPCall(crumbUrl, "GET", build, listener);
+                connection.addRequestProperty(crumb.getString("crumbRequestField"),crumb.getString("crumb"));
+            }
             // if there is a username + apiToken defined for this remote host, then use it
             String usernameTokenConcat;
 

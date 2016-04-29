@@ -30,18 +30,20 @@ public class RemoteJenkinsServer extends AbstractDescribableImpl<RemoteJenkinsSe
     private final URL             address;
     private final String          displayName;
     private final boolean         hasBuildTokenRootSupport;
+    private final boolean         hasCrumbSupport;
     private final String          username;
     private final String          apiToken;
 
     private CopyOnWriteList<Auth> auth = new CopyOnWriteList<Auth>();
 
     @DataBoundConstructor
-    public RemoteJenkinsServer(String address, String displayName, boolean hasBuildTokenRootSupport, JSONObject auth)
+    public RemoteJenkinsServer(String address, String displayName, boolean hasBuildTokenRootSupport, boolean hasCrumbSupport, JSONObject auth)
             throws MalformedURLException {
 
         this.address = new URL(address);
         this.displayName = displayName.trim();
         this.hasBuildTokenRootSupport = hasBuildTokenRootSupport;
+        this.hasCrumbSupport = hasCrumbSupport;
 
         // Holding on to both of these variables for legacy purposes. The seemingly 'dirty' getters for these properties
         // are for the same reason.
@@ -76,6 +78,10 @@ public class RemoteJenkinsServer extends AbstractDescribableImpl<RemoteJenkinsSe
 
     public boolean getHasBuildTokenRootSupport() {
         return this.hasBuildTokenRootSupport;
+    }
+
+    public boolean hasCrumbSupport() {
+        return hasCrumbSupport;
     }
 
     @Override
