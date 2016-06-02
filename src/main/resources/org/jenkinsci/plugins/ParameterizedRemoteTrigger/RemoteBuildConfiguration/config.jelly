@@ -25,6 +25,10 @@
      <f:number clazz="positive-number" min="1" step="1" default="10" />
   </f:entry>
 
+  <f:entry title="Strictly wait for next build number to start (no scan for build number and parameter checking)." field="useNextBuildNumber">
+    <f:checkbox />
+  </f:entry>
+
   <f:entry title="Block until the remote triggered projects finish their builds." field="blockBuildUntilComplete">
     <f:checkbox />
   </f:entry>

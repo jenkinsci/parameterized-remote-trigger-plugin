@@ -62,6 +62,7 @@ public class RemoteBuildConfiguration extends Builder {
     private final boolean         preventRemoteBuildQueue;
     private final boolean         blockBuildUntilComplete;
     private final boolean         enhancedLogging;
+    private final boolean         useNextBuildNumber;
 
     // "parameters" is the raw string entered by the user
     private final String          parameters;
@@ -85,7 +86,7 @@ public class RemoteBuildConfiguration extends Builder {
     @DataBoundConstructor
     public RemoteBuildConfiguration(String remoteJenkinsName, boolean shouldNotFailBuild, String job, String token,
             String parameters, boolean enhancedLogging, JSONObject overrideAuth, JSONObject loadParamsFromFile, boolean preventRemoteBuildQueue,
-            boolean blockBuildUntilComplete, int pollInterval) throws MalformedURLException {
+            boolean blockBuildUntilComplete, int pollInterval, boolean useNextBuildNumber) throws MalformedURLException {
 
         this.token = token.trim();
         this.remoteJenkinsName = remoteJenkinsName;
@@ -95,6 +96,7 @@ public class RemoteBuildConfiguration extends Builder {
         this.blockBuildUntilComplete = blockBuildUntilComplete;
         this.pollInterval = pollInterval;
         this.enhancedLogging = enhancedLogging;
+        this.useNextBuildNumber = useNextBuildNumber;
 
         if (overrideAuth != null && overrideAuth.has("auth")) {
             this.overrideAuth = true;
@@ -128,7 +130,7 @@ public class RemoteBuildConfiguration extends Builder {
 
     public RemoteBuildConfiguration(String remoteJenkinsName, boolean shouldNotFailBuild,
             boolean preventRemoteBuildQueue, boolean blockBuildUntilComplete, int pollInterval, String job,
-            String token, String parameters, boolean enhancedLogging) throws MalformedURLException {
+            String token, String parameters, boolean enhancedLogging, boolean useNextBuildNumber) throws MalformedURLException {
 
         this.token = token.trim();
         this.remoteJenkinsName = remoteJenkinsName;
@@ -141,6 +143,7 @@ public class RemoteBuildConfiguration extends Builder {
         this.pollInterval = pollInterval;
         this.overrideAuth = false;
         this.auth.replaceBy(new Auth(null));
+        this.useNextBuildNumber = useNextBuildNumber;
 
         this.loadParamsFromFile = false;
 
@@ -548,39 +551,43 @@ public class RemoteBuildConfiguration extends Builder {
 
         listener.getLogger().println("Triggering remote job now.");
         sendHTTPCall(triggerUrlString, "POST", build, listener);
-        // Validate the build number via parameters
-        foundIt: for (int tries = 3; tries > 0; tries--) {
-            for (int buildNumber : new SearchPattern(nextBuildNumber, 2)) {
-                listener.getLogger().println("Checking parameters of #" + buildNumber);
-                String validateUrlString = this.buildGetUrl(jobName, securityToken) + "/" + buildNumber + "/api/json/";
-                JSONObject validateResponse = sendHTTPCall(validateUrlString, "GET", build, listener);
-                if (validateResponse == null) {
-                    listener.getLogger().println("Query failed.");
-                    continue;
-                }
-                JSONArray actions = validateResponse.getJSONArray("actions");
-                for (int i = 0; i < actions.size(); i++) {
-                    JSONObject action = actions.getJSONObject(i);
-                    if (!action.has("parameters")) continue;
-                    JSONArray parameters = action.getJSONArray("parameters");
-                    // Check if the parameters match
-                    if (compareParameters(listener, parameters, cleanedParams)) {
-                        // We now have a very high degree of confidence that this is the correct build.
-                        // It is still possible that this is a false positive if there are no parameters,
-                        // or multiple jobs use the same parameters.
-                        nextBuildNumber = buildNumber;
-                        break foundIt;
-                    }
-                    // This is the wrong build
-                    break;
-                }
 
-                // Sleep for 'pollInterval' seconds.
-                // Sleep takes miliseconds so need to convert this.pollInterval to milisecopnds (x 1000)
-                try {
-                    Thread.sleep(this.pollInterval * 1000);
-                } catch (InterruptedException e) {
-                    this.failBuild(e, listener);
+        if(!useNextBuildNumber) {
+            // Validate the build number via parameters
+            foundIt:
+            for (int tries = 3; tries > 0; tries--) {
+                for (int buildNumber : new SearchPattern(nextBuildNumber, 2)) {
+                    listener.getLogger().println("Checking parameters of #" + buildNumber);
+                    String validateUrlString = this.buildGetUrl(jobName, securityToken) + "/" + buildNumber + "/api/json/";
+                    JSONObject validateResponse = sendHTTPCall(validateUrlString, "GET", build, listener);
+                    if (validateResponse == null) {
+                        listener.getLogger().println("Query failed.");
+                        continue;
+                    }
+                    JSONArray actions = validateResponse.getJSONArray("actions");
+                    for (int i = 0; i < actions.size(); i++) {
+                        JSONObject action = actions.getJSONObject(i);
+                        if (!action.has("parameters")) continue;
+                        JSONArray parameters = action.getJSONArray("parameters");
+                        // Check if the parameters match
+                        if (compareParameters(listener, parameters, cleanedParams)) {
+                            // We now have a very high degree of confidence that this is the correct build.
+                            // It is still possible that this is a false positive if there are no parameters,
+                            // or multiple jobs use the same parameters.
+                            nextBuildNumber = buildNumber;
+                            break foundIt;
+                        }
+                        // This is the wrong build
+                        break;
+                    }
+
+                    // Sleep for 'pollInterval' seconds.
+                    // Sleep takes miliseconds so need to convert this.pollInterval to milisecopnds (x 1000)
+                    try {
+                        Thread.sleep(this.pollInterval * 1000);
+                    } catch (InterruptedException e) {
+                        this.failBuild(e, listener);
+                    }
                 }
             }
         }
@@ -1090,6 +1097,10 @@ public class RemoteBuildConfiguration extends Builder {
 
     public int getPollInterval() {
         return this.pollInterval;
+    }
+
+    public boolean getUseNextBuildNumber() {
+        return this.useNextBuildNumber;
     }
 
     /**
