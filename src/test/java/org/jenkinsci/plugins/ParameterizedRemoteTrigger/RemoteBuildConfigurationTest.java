@@ -31,7 +31,7 @@ public class RemoteBuildConfigurationTest {
         FreeStyleProject project = jenkinsRule.createFreeStyleProject();
         RemoteBuildConfiguration remoteBuildConfiguration = new RemoteBuildConfiguration(
                 remoteJenkinsServer.getDisplayName(), false, remoteProject.getFullName(), "",
-                "", true, null, null, false, true, 1);
+                "", true, null, null, false, true, 1, false);
         project.getBuildersList().add(remoteBuildConfiguration);
 
         jenkinsRule.buildAndAssertSuccess(project);
