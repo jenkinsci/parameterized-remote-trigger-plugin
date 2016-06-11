@@ -2,7 +2,6 @@ package org.jenkinsci.plugins.ParameterizedRemoteTrigger;
 
 import hudson.AbortException;
 import hudson.FilePath;
-import hudson.EnvVars;
 import hudson.Launcher;
 import hudson.Extension;
 import hudson.util.CopyOnWriteList;
@@ -16,8 +15,6 @@ import hudson.tasks.BuildStepDescriptor;
 import net.sf.json.JSONObject;
 import net.sf.json.JSONArray;
 import net.sf.json.JSONSerializer;
-//import net.sf.json.
-//import net.sf.json.
 
 import net.sf.json.util.JSONUtils;
 
@@ -29,7 +26,6 @@ import org.kohsuke.stapler.StaplerRequest;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -42,7 +38,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-
+ 
 import org.apache.commons.codec.binary.Base64;
 
 /**
@@ -157,41 +153,44 @@ public class RemoteBuildConfiguration extends Builder {
      * ```getCleanedParameters``` before returning.
      * 
      * @param build
+     * @param listener 
      * @return List<String> of build parameters
      */
-    private List<String> loadExternalParameterFile(AbstractBuild<?, ?> build) {
-
-        FilePath workspace = build.getWorkspace();
-        BufferedReader br = null;
+    private List<String> loadExternalParameterFile(AbstractBuild<?, ?> build, BuildListener listener) {
+    	
         List<String> ParameterList = new ArrayList<String>();
-        try {
-
-            String filePath = workspace + this.getParameterFile();
-            String sCurrentLine;
-            String fileContent = "";
-
-            br = new BufferedReader(new FileReader(filePath));
-
-            while ((sCurrentLine = br.readLine()) != null) {
-                // fileContent += sCurrentLine;
+        
+        // Trimming starting "/" else it is a absolute path.
+        String fileName=this.getParameterFile();
+        while (fileName.startsWith("/")){
+        	fileName=fileName.substring(1);
+        }
+        
+        listener.getLogger().println("Reading properties from file: " + fileName);
+        
+        FilePath file=build.getWorkspace().child(fileName);
+        
+        BufferedReader br = null;
+        try{
+        	br=new BufferedReader(new InputStreamReader(file.read()));
+        	
+        	String sCurrentLine;
+        	while ((sCurrentLine = br.readLine()) != null) {
                 ParameterList.add(sCurrentLine);
             }
-
-            // ParameterList = new ArrayList<String>(Arrays.asList(fileContent));
-
-        } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        } finally {
-            try {
-                if (br != null) {
-                    br.close();
-                }
-            } catch (IOException ex) {
-                ex.printStackTrace();
-            }
+        }catch(IOException e){
+        	listener.getLogger().println("Cannot read properties file: " + e.getMessage());
+        }finally {
+               try {
+                   if (br != null) {
+                       br.close();
+                   }
+               } catch (IOException ex) {
+                   // No-op 
+               }
         }
-        // FilePath.
+        
+        // clean and return parameters
         return getCleanedParameters(ParameterList);
     }
 
@@ -474,7 +473,7 @@ public class RemoteBuildConfiguration extends Builder {
         List<String> cleanedParams = null;
 
         if (this.getLoadParamsFromFile()) {
-            cleanedParams = loadExternalParameterFile(build);
+            cleanedParams = loadExternalParameterFile(build, listener);
         } else {
             // tokenize all variables and encode all variables, then build the fully-qualified trigger URL
             cleanedParams = getCleanedParameters();
