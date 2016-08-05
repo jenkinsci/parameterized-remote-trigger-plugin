@@ -383,11 +383,11 @@ public class RemoteBuildConfiguration extends Builder {
             triggerUrlString += buildTokenRootUrl;
             triggerUrlString += getBuildTypeUrl(isRemoteJobParameterized);
 
-            this.addToQueryString("job=" + this.encodeValue(job));
+            this.addToQueryString("job=" + this.encodeJobName(job));
 
         } else {
             triggerUrlString += "/job/";
-            triggerUrlString += this.encodeValue(job);
+            triggerUrlString += this.encodeJobName(job);
             triggerUrlString += getBuildTypeUrl(isRemoteJobParameterized);
         }
 
@@ -428,7 +428,7 @@ public class RemoteBuildConfiguration extends Builder {
         String urlString = remoteServer.getAddress().toString();
 
         urlString += "/job/";
-        urlString += this.encodeValue(job);
+        urlString += this.encodeJobName(job);
 
         // don't try to include a security token in the URL if none is provided
         if (!securityToken.equals("")) {
@@ -588,7 +588,7 @@ public class RemoteBuildConfiguration extends Builder {
         BuildInfoExporterAction.addBuildInfoExporterAction(build, jobName, nextBuildNumber, Result.NOT_BUILT);
         
         //Have to form the string ourselves, as we might not get a response from non-parameterized builds
-        String jobURL = remoteServerURL + "/job/" + this.encodeValue(jobName) + "/";
+        String jobURL = remoteServerURL + "/job/" + this.encodeJobName(jobName) + "/";
 
         // This is only for Debug
         // This output whether there is another job running on the remote host that this job had conflicted with.
@@ -1061,6 +1061,18 @@ public class RemoteBuildConfiguration extends Builder {
         }
 
         return cleanValue;
+    }
+
+/**
+     * Helper function for character encoding
+     * 
+     * @param dirtyValue
+     * @return encoded value
+     */
+    private String encodeJobName(String dirtyValue) {
+        // Decode back forward slashes to enable support for projects which are nested in views
+        // (e.g. MyView/job/MyJob for a job which is located at http://jenkins/job/MyView/job/MyJob)
+        return this.encodeValue(dirtyValue).replaceAll("(?i)%2F", "/");
     }
 
     // Getters
