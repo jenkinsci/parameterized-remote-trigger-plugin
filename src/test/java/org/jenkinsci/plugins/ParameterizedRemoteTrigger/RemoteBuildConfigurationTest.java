@@ -34,6 +34,7 @@ public class RemoteBuildConfigurationTest {
                 "", true, null, null, false, true, 1);
         project.getBuildersList().add(remoteBuildConfiguration);
 
+        jenkinsRule.waitUntilNoActivity();
         jenkinsRule.buildAndAssertSuccess(project);
     }
 }
