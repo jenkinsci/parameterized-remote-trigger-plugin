@@ -589,7 +589,7 @@ public class RemoteBuildConfiguration extends Builder {
         
         //Have to form the string ourselves, as we might not get a response from non-parameterized builds
         String jobURL = remoteServerURL + "/job/" + this.encodeValue(jobName) + "/";
-
+        listener.getLogger().println("Remote job URL link: " + jobURL + Integer.toString(nextBuildNumber)); //useful when the job fails you can just click on link
         // This is only for Debug
         // This output whether there is another job running on the remote host that this job had conflicted with.
         // The first condition is what is expected, The second is what would happen if two jobs launched jobs at the
