@@ -519,9 +519,10 @@ public class RemoteBuildConfiguration extends Builder {
                         this.failBuild(e, listener);
                     }
                 }
-                listener.getLogger().println("Remote job remote job " + jobName + " is not currenlty building.");    
+                listener.getLogger().println("Remote job " + jobName + " is not currenlty building.");
             } else {
-                this.failBuild(new Exception("Got a blank response from Remote Jenkins Server, cannot continue."), listener);
+                //this.failBuild(new Exception("Got a blank response from Remote Jenkins Server, cannot continue."), listener);
+                listener.getLogger().println("Remote job " + jobName + " probably not run once, try to continue.");
             }
 
         } else {
@@ -548,42 +549,45 @@ public class RemoteBuildConfiguration extends Builder {
 
         listener.getLogger().println("Triggering remote job now.");
         sendHTTPCall(triggerUrlString, "POST", build, listener);
-        // Validate the build number via parameters
-        foundIt: for (int tries = 3; tries > 0; tries--) {
-            for (int buildNumber : new SearchPattern(nextBuildNumber, 2)) {
-                listener.getLogger().println("Checking parameters of #" + buildNumber);
-                String validateUrlString = this.buildGetUrl(jobName, securityToken) + "/" + buildNumber + "/api/json/";
-                JSONObject validateResponse = sendHTTPCall(validateUrlString, "GET", build, listener);
-                if (validateResponse == null) {
-                    listener.getLogger().println("Query failed.");
-                    continue;
-                }
-                JSONArray actions = validateResponse.getJSONArray("actions");
-                for (int i = 0; i < actions.size(); i++) {
-                    JSONObject action = actions.getJSONObject(i);
-                    if (!action.has("parameters")) continue;
-                    JSONArray parameters = action.getJSONArray("parameters");
-                    // Check if the parameters match
-                    if (compareParameters(listener, parameters, cleanedParams)) {
-                        // We now have a very high degree of confidence that this is the correct build.
-                        // It is still possible that this is a false positive if there are no parameters,
-                        // or multiple jobs use the same parameters.
-                        nextBuildNumber = buildNumber;
-                        break foundIt;
+        if(isRemoteParameterized) {
+            // Validate the build number via parameters
+            foundIt: for (int tries = 3; tries > 0; tries--) {
+                for (int buildNumber : new SearchPattern(nextBuildNumber, 2)) {
+                    listener.getLogger().println("Checking parameters of #" + buildNumber);
+                    String validateUrlString = this.buildGetUrl(jobName, securityToken) + "/" + buildNumber + "/api/json/";
+                    JSONObject validateResponse = sendHTTPCall(validateUrlString, "GET", build, listener);
+                    if (validateResponse == null) {
+                        listener.getLogger().println("Query failed.");
+                        continue;
                     }
-                    // This is the wrong build
-                    break;
-                }
+                    JSONArray actions = validateResponse.getJSONArray("actions");
+                    for (int i = 0; i < actions.size(); i++) {
+                        JSONObject action = actions.getJSONObject(i);
+                        if (!action.has("parameters")) continue;
+                        JSONArray parameters = action.getJSONArray("parameters");
+                        // Check if the parameters match
+                        if (compareParameters(listener, parameters, cleanedParams)) {
+                            // We now have a very high degree of confidence that this is the correct build.
+                            // It is still possible that this is a false positive if there are no parameters,
+                            // or multiple jobs use the same parameters.
+                            nextBuildNumber = buildNumber;
+                            break foundIt;
+                        }
+                        // This is the wrong build
+                        break;
+                    }
 
-                // Sleep for 'pollInterval' seconds.
-                // Sleep takes miliseconds so need to convert this.pollInterval to milisecopnds (x 1000)
-                try {
-                    Thread.sleep(this.pollInterval * 1000);
-                } catch (InterruptedException e) {
-                    this.failBuild(e, listener);
+                    // Sleep for 'pollInterval' seconds.
+                    // Sleep takes miliseconds so need to convert this.pollInterval to milisecopnds (x 1000)
+                    try {
+                        Thread.sleep(this.pollInterval * 1000);
+                    } catch (InterruptedException e) {
+                        this.failBuild(e, listener);
+                    }
                 }
             }
         }
+
         listener.getLogger().println("This job is build #[" + Integer.toString(nextBuildNumber) + "] on the remote server.");
         BuildInfoExporterAction.addBuildInfoExporterAction(build, jobName, nextBuildNumber, Result.NOT_BUILT);
         
@@ -1164,8 +1168,14 @@ public class RemoteBuildConfiguration extends Builder {
         try {
             JSONObject response = sendHTTPCall(remoteServerUrl, "GET", build, listener);
 
-            if(response.getJSONArray("actions").size() >= 1){
-                isParameterized = true;
+            JSONArray parameters = response.getJSONArray("actions");
+            if(parameters.size() >= 1){
+                for(int i = 0; i < parameters.size(); i++) {
+                    if(parameters.getJSONObject(i).has("parameterDefinitions") ) {
+                        isParameterized = true;
+                        break;
+                    }
+                }
             }
             
         } catch (IOException e) {
