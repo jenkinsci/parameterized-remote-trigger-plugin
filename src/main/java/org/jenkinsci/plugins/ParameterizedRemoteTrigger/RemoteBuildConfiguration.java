@@ -550,6 +550,9 @@ public class RemoteBuildConfiguration extends Builder {
         listener.getLogger().println("Triggering remote job now.");
         sendHTTPCall(triggerUrlString, "POST", build, listener);
         if(isRemoteParameterized) {
+            // The triggered build may start to run after a few seconds delay, so querying the build immediately may returns null
+            // This sometimes cause the following step getting a wrong build number, which is smaller than the actual value.
+            Thread.sleep(this.pollInterval * 1000);
             // Validate the build number via parameters
             foundIt: for (int tries = 3; tries > 0; tries--) {
                 for (int buildNumber : new SearchPattern(nextBuildNumber, 2)) {
