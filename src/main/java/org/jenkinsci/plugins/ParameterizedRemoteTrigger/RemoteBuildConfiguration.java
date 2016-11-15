@@ -977,7 +977,7 @@ public class RemoteBuildConfiguration extends Builder {
                 is = connection.getErrorStream();
             }
             
-            BufferedReader rd = new BufferedReader(new InputStreamReader(is));
+            BufferedReader rd = new BufferedReader(new InputStreamReader(is, "utf-8"));
             String line;
             // String response = "";
             StringBuilder response = new StringBuilder();
@@ -986,7 +986,7 @@ public class RemoteBuildConfiguration extends Builder {
                 response.append(line);
             }
             rd.close();
-            
+
             // JSONSerializer serializer = new JSONSerializer();
             // need to parse the data we get back into struct
             //listener.getLogger().println("Called URL: '" + urlString +  "', got response: '" + response.toString() + "'");
