@@ -10,6 +10,7 @@ import java.util.List;
 import net.sf.json.JSONObject;
 
 import org.kohsuke.stapler.DataBoundConstructor;
+import org.kohsuke.stapler.DataBoundSetter;
 import org.kohsuke.stapler.QueryParameter;
 
 import hudson.Extension;
@@ -69,8 +70,13 @@ public class RemoteJenkinsServer extends AbstractDescribableImpl<RemoteJenkinsSe
         }
         return displayName;
     }
+    
+    @DataBoundSetter
+    public void setAuth(CopyOnWriteList<Auth> auth) {
+		this.auth = auth;
+	}
 
-    public URL getAddress() {
+	public URL getAddress() {
         return address;
     }
 
@@ -100,15 +106,7 @@ public class RemoteJenkinsServer extends AbstractDescribableImpl<RemoteJenkinsSe
         }
 
         public ListBoxModel doFillCredsItems() {
-            // StandardUsernameListBoxModel model = new StandardUsernameListBoxModel();
-
-            // Item item = Stapler.getCurrentRequest().findAncestorObject(Item.class);
-            // model.withAll(CredentialsProvider.lookupCredentials(StandardUsernameCredentials.class, item, ACL.SYSTEM,
-            // Collections.<DomainRequirement>emptyList()));
-
             return Auth.DescriptorImpl.doFillCredsItems();
-
-            // return model;
         }
 
         public JSONObject doFillAuthenticationMode() {

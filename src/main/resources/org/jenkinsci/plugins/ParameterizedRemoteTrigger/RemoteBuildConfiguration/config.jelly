@@ -28,6 +28,14 @@
   <f:entry title="Block until the remote triggered projects finish their builds." field="blockBuildUntilComplete">
     <f:checkbox />
   </f:entry>
+  
+  <f:entry name="resultOutput" title="Result Output - Console/HTML" field="resultOutput">
+    <select name="resultOutput">
+      <f:option value="consoleText" selected='${instance.resultOutput=="consoleText"}'>consoleText</f:option>
+      <f:option value="progressiveText" selected='${instance.resultOutput=="progressiveText"}'>progressiveText</f:option>
+      <f:option value="progressiveHtml" selected='${instance.resultOutput=="progressiveHtml"}'>progressiveHtml</f:option>
+    </select>
+  </f:entry>
     
   <f:entry title="Remote Job Name" field="job">
     <f:textbox />
