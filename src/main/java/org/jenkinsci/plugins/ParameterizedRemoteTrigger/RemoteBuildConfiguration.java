@@ -438,6 +438,23 @@ public class RemoteBuildConfiguration extends Builder {
     }
 
     /**
+     * Build the proper URL for GET calls for queue
+     *
+     * All passed in string have already had their tokens replaced with real values.
+     *
+     * @return fully formed, fully qualified remote trigger URL
+     */
+    private String buildGetUrlForQueue() {
+
+        RemoteJenkinsServer remoteServer = this.findRemoteHost(this.getRemoteJenkinsName());
+        String urlString = remoteServer.getAddress().toString();
+
+        urlString += "/queue/api/json";
+
+        return urlString;
+    }
+
+    /**
      * Convenience function to mark the build as failed. It's intended to only be called from this.perform();
      * 
      * @param e
@@ -519,7 +536,7 @@ public class RemoteBuildConfiguration extends Builder {
                         this.failBuild(e, listener);
                     }
                 }
-                listener.getLogger().println("Remote job remote job " + jobName + " is not currenlty building.");    
+                listener.getLogger().println("Remote job " + jobName + " is not currently building.");
             } else {
                 this.failBuild(new Exception("Got a blank response from Remote Jenkins Server, cannot continue."), listener);
             }
@@ -533,31 +550,100 @@ public class RemoteBuildConfiguration extends Builder {
 
         //listener.getLogger().println("Getting ID of next job to build. URL: " + queryUrlString);
         JSONObject queryResponseObject = sendHTTPCall(queryUrlString, "GET", build, listener);
-        if (queryResponseObject == null ) {
+        if (queryResponseObject == null) {
             //This should not happen as this page should return a JSON object
             this.failBuild(new Exception("Got a blank response from Remote Jenkins Server [" + remoteServerURL + "], cannot continue."), listener);
         }
-        
+
         int nextBuildNumber = queryResponseObject.getInt("nextBuildNumber");
 
         if (this.getOverrideAuth()) {
             listener.getLogger().println(
-                    "Using job-level defined credentails in place of those from remote Jenkins config ["
+                    "Using job-level defined credentials in place of those from remote Jenkins config ["
                             + this.getRemoteJenkinsName() + "]");
         }
 
         listener.getLogger().println("Triggering remote job now.");
-        sendHTTPCall(triggerUrlString, "POST", build, listener);
-        // Validate the build number via parameters
-        foundIt: for (int tries = 3; tries > 0; tries--) {
-            for (int buildNumber : new SearchPattern(nextBuildNumber, 2)) {
-                listener.getLogger().println("Checking parameters of #" + buildNumber);
-                String validateUrlString = this.buildGetUrl(jobName, securityToken) + "/" + buildNumber + "/api/json/";
-                JSONObject validateResponse = sendHTTPCall(validateUrlString, "GET", build, listener);
-                if (validateResponse == null) {
-                    listener.getLogger().println("Query failed.");
-                    continue;
+        JSONObject triggeredBuildResponse = sendHTTPCall(triggerUrlString, "POST", build, listener);
+        
+        int queueID = -1;
+        boolean foundInQueue = false;
+        // Wait for remote triggered job not to be in queue before checking the actual build for 20 mins
+        // checkingQueue: for (int timeout = 0; timeout < 20 * 60 * 1000; timeout += this.pollInterval * 1000) {
+        checkingQueue: for (int attempts = 20; attempts > 0; attempts--) {
+            foundInQueue = false;
+
+            String queueUrlString = this.buildGetUrlForQueue();
+            JSONObject queueResponseObject = sendHTTPCall(queueUrlString, "GET", build, listener);
+            if (queueResponseObject == null) {
+                listener.getLogger().println("Queue Query failed.");
+                continue;
+            }
+
+            JSONArray queued_items = queueResponseObject.getJSONArray("items");
+            listener.getLogger().println("\nNumber of Queued Builds: " + queued_items.size());
+
+            if (queued_items.size() == 0) {
+                listener.getLogger().println("\nNothing in queue. It should be running already.\n");
+                break checkingQueue;
+            }
+            foundInQueue: for (int i = 0; i < queued_items.size(); i++) {
+                JSONObject item = queued_items.getJSONObject(i);
+                listener.getLogger().println("Checking parameters of queued builds #" + i);
+                JSONArray actions = item.getJSONArray("actions");
+                for (int j = 0; j < actions.size(); j++) {
+                    JSONObject action = actions.getJSONObject(j);
+                    if (!action.has("parameters")) continue;
+                    JSONArray parameters = action.getJSONArray("parameters");
+                    // Check if the parameters match
+                    if (compareParameters(listener, parameters, cleanedParams)) {
+                        // We now have a very high degree of confidence that this is the correct item in queue.
+                        // It is still possible that this is a false positive if there are no parameters,
+                        // or multiple jobs use the same parameters.
+                        queueID = item.getInt("id");
+                        listener.getLogger().println("Queue ID of the matching build: " + queueID + "\n");
+                        foundInQueue = true;
+                        break foundInQueue;
+                    }
                 }
+            }
+
+            if (foundInQueue == false) {
+                listener.getLogger().println("\nCannot find a matching build in queue. It should be running already.\n");
+                break checkingQueue;
+            }
+            // Sleep for 'pollInterval' seconds.
+            // Sleep takes miliseconds so need to convert this.pollInterval to milisecopnds (x 1000)
+            try {
+                Thread.sleep(this.pollInterval * 1000);
+            } catch (InterruptedException e) {
+                this.failBuild(e, listener);
+            }
+        }
+
+        // If the build is still in queue after 20 polls, fail the build?
+        if (foundInQueue == true) {
+            this.failBuild(new Exception("The build is still in queue after " + 20 * this.pollInterval + "seconds. Please check if the remote Jenkins is working properly."), listener);
+        }
+
+        // Remote Build should now be building (Not in queue anymore)
+        // Get the next build number now after confirming the matching build is not in queue
+        // JSONObject queryResponseObject = sendHTTPCall(queryUrlString, "GET", build, listener);
+        // int nextBuildNumber = queryResponseObject.getInt("nextBuildNumber");
+
+        boolean isBuildFound = false;
+        // Validate the build number via parameters
+        foundIt: for (int buildNumber : new SearchPattern(nextBuildNumber, 10)) {
+            listener.getLogger().println("Checking Build #" + buildNumber);
+            String validateUrlString = this.buildGetUrl(jobName, securityToken) + "/" + buildNumber + "/api/json/";
+            JSONObject validateResponse = sendHTTPCall(validateUrlString, "GET", build, listener);
+            if (validateResponse == null) {
+                listener.getLogger().println("Query failed.");
+                continue;
+            }
+            // If queueID was not found in first place because there was no queue
+            if (queueID == -1) {
+                listener.getLogger().println("Checking parameters of #" + buildNumber);
                 JSONArray actions = validateResponse.getJSONArray("actions");
                 for (int i = 0; i < actions.size(); i++) {
                     JSONObject action = actions.getJSONObject(i);
@@ -569,6 +655,7 @@ public class RemoteBuildConfiguration extends Builder {
                         // It is still possible that this is a false positive if there are no parameters,
                         // or multiple jobs use the same parameters.
                         nextBuildNumber = buildNumber;
+                        isBuildFound = true;
                         break foundIt;
                     }
                     // This is the wrong build
@@ -582,8 +669,20 @@ public class RemoteBuildConfiguration extends Builder {
                 } catch (InterruptedException e) {
                     this.failBuild(e, listener);
                 }
+            } else { // If queueID was found, use queueID to find
+                listener.getLogger().println("Checking Queue ID of #" + buildNumber);
+                if (queueID == validateResponse.getInt("queueId")) {
+                    nextBuildNumber = buildNumber;
+                    isBuildFound = true;
+                    break foundIt;
+                }
             }
         }
+
+        if (isBuildFound == false) {
+            this.failBuild(new Exception("Cannot find the correct build within +/- 10 builds. Please investigate if it has run or not."), listener);
+        }
+
         listener.getLogger().println("This job is build #[" + Integer.toString(nextBuildNumber) + "] on the remote server.");
         BuildInfoExporterAction.addBuildInfoExporterAction(build, jobName, nextBuildNumber, Result.NOT_BUILT);
         
@@ -693,6 +792,8 @@ public class RemoteBuildConfiguration extends Builder {
             }
 
             String value = parameter.getString("value");
+
+            listener.getLogger().println("Build Parameters: " + name + " => " + value);
             // If we got the expected value, skip to the next parameter
             if (expected.equals(value)) continue;
 
