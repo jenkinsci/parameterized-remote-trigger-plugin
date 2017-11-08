@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.ListIterator;
 
 import org.apache.commons.codec.binary.Base64;
 
@@ -1164,8 +1165,19 @@ public class RemoteBuildConfiguration extends Builder {
         try {
             JSONObject response = sendHTTPCall(remoteServerUrl, "GET", build, listener);
 
-            if(response.getJSONArray("actions").size() >= 1){
-                isParameterized = true;
+            JSONArray actionsArray = response.getJSONArray("actions");
+            if (actionsArray != null)  {
+                ListIterator<?> iterator = actionsArray.listIterator();
+                while(iterator.hasNext()) {
+                    Object cur = iterator.next();
+                    if (cur instanceof JSONObject) {
+                        JSONArray parametersArray = ((JSONObject) cur).optJSONArray("parameterDefinitions");
+                        if (parametersArray != null && parametersArray.size() >= 1) {
+                            isParameterized = true;
+                            break;
+                        }                           
+                    }
+                }
             }
             
         } catch (IOException e) {
