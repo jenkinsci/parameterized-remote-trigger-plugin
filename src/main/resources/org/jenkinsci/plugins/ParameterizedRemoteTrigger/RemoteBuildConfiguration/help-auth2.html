@@ -1,0 +1,21 @@
+<div>
+Using this parameter you can override the authentication used to connect to the selected remote Jenkins.
+<ul>
+  <li><b>Don't Override</b><br/>
+    The authentication configured in the (global) settings of the selected 'remote host' is used.
+  </li>
+  <li><b>Token Authentication</b><br/>
+    The specified user id and Jenkins API token is used.
+  </li>
+  <li><b>Credentials Authentication</b><br/>
+    The specified Jenkins Credentials are used. This can be either user/password or user/API Token.
+  </li>
+  <li><b>No Authentication</b><br/>
+    No Authorization header will be sent, independent of the global 'remote host' settings.
+  </li>
+</ul>
+
+<b>Note:</b> <i>Jenkins API Tokens</i> are recommended since, if stolen, they allow access only to a specific Jenkins
+while user and password typically provide access to many systems.
+
+</div>

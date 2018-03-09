@@ -1,0 +1,24 @@
+<div>
+The `triggerRemoteJob` pipeline step triggers a job on a remote Jenkins.<br>
+<b>The full documentation is <a href="https://github.com/jenkinsci/parameterized-remote-trigger-plugin">available in GitHub</a>.</b><br>
+<br>
+Example:
+<pre>
+//Trigger remote job
+def handle = triggerRemoteJob(remoteJenkinsName: 'remoteJenkins', job: 'RemoteJob')
+
+//Get information from the handle
+def status = handle.getBuildStatus()
+def buildUrl = handle.getBuildUrl()
+echo buildUrl.toString() + " finished with " + status.toString()
+
+//Download and parse the archived "build-results.json" (if generated and archived by remote build)
+def results = handle.readJsonFileFromBuildArchive('build-results.json')
+echo results.urlToTestResults //only example
+
+
+//List other available methods
+echo handle.help()
+</pre>
+
+</div>

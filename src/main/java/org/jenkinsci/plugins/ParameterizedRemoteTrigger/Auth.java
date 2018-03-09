@@ -1,23 +1,18 @@
 package org.jenkinsci.plugins.ParameterizedRemoteTrigger;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import net.sf.json.JSONObject;
-
-import org.jenkinsci.plugins.ParameterizedRemoteTrigger.RemoteJenkinsServer.DescriptorImpl;
+import org.jenkinsci.plugins.ParameterizedRemoteTrigger.auth2.Auth2;
+import org.jenkinsci.plugins.ParameterizedRemoteTrigger.auth2.CredentialsAuth;
+import org.jenkinsci.plugins.ParameterizedRemoteTrigger.auth2.NoneAuth;
+import org.jenkinsci.plugins.ParameterizedRemoteTrigger.auth2.NullAuth;
+import org.jenkinsci.plugins.ParameterizedRemoteTrigger.auth2.TokenAuth;
+import org.jenkinsci.plugins.ParameterizedRemoteTrigger.exceptions.CredentialsNotFoundException;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.Stapler;
-import org.kohsuke.stapler.StaplerRequest;
-
-import hudson.Extension;
-import hudson.model.AbstractDescribableImpl;
-import hudson.model.Descriptor;
-import hudson.model.Item;
-import hudson.security.ACL;
-import hudson.util.Secret;
-import hudson.util.ListBoxModel;
 
 import com.cloudbees.plugins.credentials.CredentialsProvider;
 import com.cloudbees.plugins.credentials.common.StandardUsernameCredentials;
@@ -25,85 +20,78 @@ import com.cloudbees.plugins.credentials.common.StandardUsernameListBoxModel;
 import com.cloudbees.plugins.credentials.common.UsernamePasswordCredentials;
 import com.cloudbees.plugins.credentials.domains.DomainRequirement;
 
-public class Auth extends AbstractDescribableImpl<Auth> {
+import hudson.Extension;
+import hudson.model.AbstractDescribableImpl;
+import hudson.model.Descriptor;
+import hudson.model.Item;
+import hudson.security.ACL;
+import hudson.util.ListBoxModel;
+
+/**
+ * We need to keep this for compatibility - old config deserialization!
+ * @deprecated since 2.3.0-SNAPSHOT - use {@link Auth2} instead.
+ */
+public class Auth extends AbstractDescribableImpl<Auth> implements Serializable {
+
+    private static final long serialVersionUID = 5110932168554914718L;
+
+    public static final String  NONE               = "none";
+    public static final String  API_TOKEN          = "apiToken";
+    public static final String  CREDENTIALS_PLUGIN = "credentialsPlugin";
 
     private final String authType;
     private final String username;
     private final String apiToken;
     private final String creds;
 
-    public final String  NONE               = "none";
-    public final String  API_TOKEN          = "apiToken";
-    public final String  CREDENTIALS_PLUGIN = "credentialsPlugin";
-
-    // @DataBoundConstructor
-    /*
-     * public Auth(String value, String username, String apiToken, String creds) { this.authType = value; this.username
-     * = username; this.apiToken = apiToken; this.creds = creds; }
-     */
-
     @DataBoundConstructor
-    public Auth(JSONObject formData) {
-
-        JSONObject authMode = new JSONObject();
-        // because I don't know how to automatically bind a JSON object to properties in a constructor, we are manually
-        // pulling out each item and assigning it
-        if (formData.has("authenticationMode")) {
-            authMode = (JSONObject) formData.get("authenticationMode");
-        }
-
-        this.authType = (String) authMode.get("value");
-        this.username = (String) authMode.get("username");
-        this.apiToken = (String) authMode.get("apiToken");
-        this.creds = (String) authMode.get("creds");
+    public Auth(String authType, String username, String apiToken, String creds) {
+        this.authType = authType;
+        this.username = username;
+        this.apiToken = apiToken;
+        this.creds = creds;
     }
 
     public String getAuthType() {
-        return this.authType;
-    }
-
-    public Boolean isMatch(String value) {
-        return this.getAuthType().equals(value);
+        return authType;
     }
 
     public String getUsername() {
-        String authType = this.getAuthType();
-        String username = null;
-
-        if(authType == null) {
-            username = "";
-        }else if (authType.equals(NONE)) {
-            username = "";
-        } else if (authType.equals(API_TOKEN)) {
-            username = this.username;
-        } else if (authType.equals(CREDENTIALS_PLUGIN)) {
-            username = this.getCredentials().getUsername();
-        }
-
         return username;
     }
 
-    public String getPassword() {
-        String authType = this.getAuthType();
-        String password = null;
-
-        if (authType.equals(NONE)) {
-            password = "";
-        } else if (authType.equals(API_TOKEN)) {
-            password = this.getApiToken();
-        } else if (authType.equals(CREDENTIALS_PLUGIN)) {
-            password = Secret.toString(this.getCredentials().getPassword());
-        }
-
-        return password;
-    }
-
     public String getApiToken() {
-        return this.apiToken;
+        return apiToken;
     }
 
     public String getCreds() {
-        return this.creds;
+        return creds;
+    }
+
+    public Boolean isMatch(String value) {
+        return authType.equals(value);
+    }
+
+    public String getUser(){
+        if (authType.equals(API_TOKEN)){
+            return username;	
+        } else if (authType.equals(CREDENTIALS_PLUGIN)){
+            UsernamePasswordCredentials creds = getCredentials();
+            return creds != null ? creds.getUsername() : "";
+        } else {
+            return "";
+        }
+    }
+
+    public String getPassword(){
+        if (authType.equals(API_TOKEN)){
+            return apiToken;
+        } else if (authType.equals(CREDENTIALS_PLUGIN)){
+            UsernamePasswordCredentials creds = getCredentials();
+            return creds != null ? creds.getPassword().getPlainText() : "";
+        } else {
+            return "";
+        }
     }
 
     /**
@@ -111,21 +99,21 @@ public class Auth extends AbstractDescribableImpl<Auth> {
      * @return the matched credentials
      */
     private UsernamePasswordCredentials getCredentials() {
-        String credetialId = this.getCreds();
-        StandardUsernameCredentials matchedCredentials = null;
         Item item = null;
 
         List<StandardUsernameCredentials> listOfCredentials = CredentialsProvider.lookupCredentials(
                 StandardUsernameCredentials.class, item, ACL.SYSTEM, Collections.<DomainRequirement> emptyList());
+
+        return (UsernamePasswordCredentials) findCredential(creds, listOfCredentials);
+    }
+
+    private StandardUsernameCredentials findCredential(String credetialId, List<StandardUsernameCredentials> listOfCredentials){
         for (StandardUsernameCredentials cred : listOfCredentials) {
             if (credetialId.equals(cred.getId())) {
-                matchedCredentials = cred;
-                break;
+                return cred;
             }
         }
-
-        // now we have matchedCredentials.getPassword() and matchedCredentials.getUsername();
-        return (UsernamePasswordCredentials) matchedCredentials;
+        return null;
     }
 
     @Override
@@ -133,6 +121,10 @@ public class Auth extends AbstractDescribableImpl<Auth> {
         return (DescriptorImpl) super.getDescriptor();
     }
 
+    /**
+     * We need to keep this for compatibility - old config deserialization!
+     * @deprecated since 2.3.0-SNAPSHOT - use {@link Auth2} instead.
+     */
     @Extension
     public static class DescriptorImpl extends Descriptor<Auth> {
         @Override
@@ -160,6 +152,51 @@ public class Auth extends AbstractDescribableImpl<Auth> {
 
             return model;
         }
+    }
 
+    public static Auth auth2ToAuth(Auth2 auth) {
+        if (auth == null)
+            return null;
+        if (auth instanceof NoneAuth) {
+            return new Auth(Auth.NONE, null, null, null);
+        } else if (auth instanceof TokenAuth) {
+            TokenAuth tokenAuth = (TokenAuth) auth;
+            return new Auth(Auth.API_TOKEN, tokenAuth.getUserName(), tokenAuth.getApiToken(), null);
+        } else if (auth instanceof CredentialsAuth) {
+            CredentialsAuth credAuth = (CredentialsAuth) auth;
+            try {
+                String credUser = credAuth.getUserName(null);
+                String credPass = credAuth.getPassword(null);
+                return new Auth(Auth.CREDENTIALS_PLUGIN, credUser, credPass, credAuth.getCredentials());
+            }
+            catch (CredentialsNotFoundException e) {
+                return new Auth(Auth.CREDENTIALS_PLUGIN, "", "", credAuth.getCredentials());
+            }
+        } else {
+            return null;
+        }
+    }
+
+    public static Auth2 authToAuth2(List<Auth> oldAuth) {
+        if(oldAuth == null || oldAuth.size() <= 0) return new NullAuth();
+        return authToAuth2(oldAuth.get(0));
+    }
+
+    public static Auth2 authToAuth2(Auth oldAuth) {
+        String authType = oldAuth.getAuthType();
+        if (Auth.NONE.equals(authType)) {
+            return new NoneAuth();
+        } else if (Auth.API_TOKEN.equals(authType)) {
+            TokenAuth newAuth = new TokenAuth();
+            newAuth.setUserName(oldAuth.getUsername());
+            newAuth.setApiToken(oldAuth.getApiToken());
+            return newAuth;
+        } else if (Auth.CREDENTIALS_PLUGIN.equals(authType)) {
+            CredentialsAuth newAuth = new CredentialsAuth();
+            newAuth.setCredentials(oldAuth.getCreds());
+            return newAuth;
+        } else {
+            return new NullAuth();
+        }
     }
 }
