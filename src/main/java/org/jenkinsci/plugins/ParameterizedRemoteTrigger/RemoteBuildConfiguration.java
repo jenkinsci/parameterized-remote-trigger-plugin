@@ -27,6 +27,10 @@ import org.jenkinsci.plugins.tokenmacro.MacroEvaluationException;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.StaplerRequest;
 
+import com.google.common.base.Joiner;
+import com.google.common.base.Optional;
+import com.google.common.base.Strings;
+
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -41,9 +45,13 @@ import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.io.IOUtils;
 
 /**
  * 
@@ -80,13 +88,10 @@ public class RemoteBuildConfiguration extends Builder {
     private final boolean         loadParamsFromFile;
     private String                parameterFile       = "";
 
-    private String                queryString         = "";
-
     @DataBoundConstructor
     public RemoteBuildConfiguration(String remoteJenkinsName, boolean shouldNotFailBuild, String job, String token,
             String parameters, boolean enhancedLogging, JSONObject overrideAuth, JSONObject loadParamsFromFile, boolean preventRemoteBuildQueue,
             boolean blockBuildUntilComplete, int pollInterval) throws MalformedURLException {
-
         this.token = token.trim();
         this.remoteJenkinsName = remoteJenkinsName;
         this.job = job.trim();
@@ -348,8 +353,8 @@ public class RemoteBuildConfiguration extends Builder {
      * 
      * @param item
      */
-    private void addToQueryString(String item) {
-        String currentQueryString = this.getQueryString();
+    private String addToQueryString(String item, String origQuery) {
+        String currentQueryString = origQuery;
         String newQueryString = "";
 
         if (currentQueryString == null || currentQueryString.equals("")) {
@@ -357,7 +362,7 @@ public class RemoteBuildConfiguration extends Builder {
         } else {
             newQueryString = currentQueryString + "&" + item;
         }
-        this.setQueryString(newQueryString);
+        return (newQueryString);
     }
 
     /**
@@ -377,13 +382,13 @@ public class RemoteBuildConfiguration extends Builder {
     private String buildTriggerUrl(String job, String securityToken, Collection<String> params, boolean isRemoteJobParameterized) {
         RemoteJenkinsServer remoteServer = this.findRemoteHost(this.getRemoteJenkinsName());
         String triggerUrlString = remoteServer.getAddress().toString();
-
+        String queryString = "";
         // start building the proper URL based on known capabiltiies of the remote server
         if (remoteServer.getHasBuildTokenRootSupport()) {
             triggerUrlString += buildTokenRootUrl;
             triggerUrlString += getBuildTypeUrl(isRemoteJobParameterized);
 
-            this.addToQueryString("job=" + this.encodeValue(job));
+            queryString = addToQueryString("job=" + this.encodeValue(job), queryString);
 
         } else {
             triggerUrlString += "/job/";
@@ -393,20 +398,20 @@ public class RemoteBuildConfiguration extends Builder {
 
         // don't try to include a security token in the URL if none is provided
         if (!securityToken.equals("")) {
-            this.addToQueryString("token=" + encodeValue(securityToken));
+        	queryString = addToQueryString("token=" + encodeValue(securityToken), queryString);
         }
 
         // turn our Collection into a query string
         String buildParams = buildUrlQueryString(params);
 
         if (!buildParams.isEmpty()) {
-            this.addToQueryString(buildParams);
+        	queryString = addToQueryString(buildParams, queryString);
         }
 
         // by adding "delay=0", this will (theoretically) force this job to the top of the remote queue
-        this.addToQueryString("delay=0");
+        queryString = addToQueryString("delay=0", queryString);
 
-        triggerUrlString += "?" + this.getQueryString();
+        triggerUrlString += "?" + queryString;
 
         return triggerUrlString;
     }
@@ -431,9 +436,9 @@ public class RemoteBuildConfiguration extends Builder {
         urlString += this.encodeValue(job);
 
         // don't try to include a security token in the URL if none is provided
-        if (!securityToken.equals("")) {
+        /*if (!securityToken.equals("")) {
             this.addToQueryString("token=" + encodeValue(securityToken));
-        }
+        }*/
         return urlString;
     }
 
@@ -473,12 +478,16 @@ public class RemoteBuildConfiguration extends Builder {
         String remoteServerURL = remoteServer.getAddress().toString();
         List<String> cleanedParams = null;
 
+        
         if (this.getLoadParamsFromFile()) {
             cleanedParams = loadExternalParameterFile(build);
         } else {
             // tokenize all variables and encode all variables, then build the fully-qualified trigger URL
             cleanedParams = getCleanedParameters();
+            listener.getLogger().println("Original parameters: " + parameters);
+            listener.getLogger().println("Cleaned parameters: " + Joiner.on(", ").join(cleanedParams));
             cleanedParams = replaceTokens(build, listener, cleanedParams);
+            listener.getLogger().println("Replaced tokens: " + Joiner.on(", ").join(cleanedParams));
         }
 
         String jobName = replaceToken(build, listener, this.getJob());
@@ -547,42 +556,76 @@ public class RemoteBuildConfiguration extends Builder {
         }
 
         listener.getLogger().println("Triggering remote job now.");
-        sendHTTPCall(triggerUrlString, "POST", build, listener);
-        // Validate the build number via parameters
-        foundIt: for (int tries = 3; tries > 0; tries--) {
-            for (int buildNumber : new SearchPattern(nextBuildNumber, 2)) {
-                listener.getLogger().println("Checking parameters of #" + buildNumber);
-                String validateUrlString = this.buildGetUrl(jobName, securityToken) + "/" + buildNumber + "/api/json/";
-                JSONObject validateResponse = sendHTTPCall(validateUrlString, "GET", build, listener);
-                if (validateResponse == null) {
-                    listener.getLogger().println("Query failed.");
-                    continue;
-                }
-                JSONArray actions = validateResponse.getJSONArray("actions");
-                for (int i = 0; i < actions.size(); i++) {
-                    JSONObject action = actions.getJSONObject(i);
-                    if (!action.has("parameters")) continue;
-                    JSONArray parameters = action.getJSONArray("parameters");
-                    // Check if the parameters match
-                    if (compareParameters(listener, parameters, cleanedParams)) {
-                        // We now have a very high degree of confidence that this is the correct build.
-                        // It is still possible that this is a false positive if there are no parameters,
-                        // or multiple jobs use the same parameters.
-                        nextBuildNumber = buildNumber;
-                        break foundIt;
-                    }
-                    // This is the wrong build
-                    break;
-                }
+        Map<String, List<String>> responseHeaders = new HashMap<String, List<String>>();
+        sendHTTPCall(triggerUrlString, "POST", build, listener, 1, responseHeaders);
+        Optional<String> queueItemURL = getLocationFromJobCreateResponse(listener, responseHeaders);
+        boolean nextBuildNumberLoadedFromQueueItem = false;
+        boolean done = false;
+        if (queueItemURL.isPresent()) {
+	        int retries = 10;
+	        while (retries > 0 && !done) {	            
+	        	JSONObject queueItem = sendHTTPCall(queueItemURL.get() + "api/json", "GET", build, listener);
 
-                // Sleep for 'pollInterval' seconds.
-                // Sleep takes miliseconds so need to convert this.pollInterval to milisecopnds (x 1000)
-                try {
-                    Thread.sleep(this.pollInterval * 1000);
-                } catch (InterruptedException e) {
-                    this.failBuild(e, listener);
-                }
-            }
+	    		listener.getLogger().println("queueItem " + queueItem);
+	    		if (queueItem != null && queueItem.has("executable")) {
+	    			JSONObject executable = queueItem.getJSONObject("executable");
+	    			if (!executable.isNullObject()) {
+		    			if (executable.has("number")) {
+		    				nextBuildNumber = executable.getInt("number");
+		    				nextBuildNumberLoadedFromQueueItem = true;
+		    				listener.getLogger().println("nextBuildNumber: " + nextBuildNumber);
+		    			}
+		    			done = true;
+	    			}
+	    			else { // build is probably in quite period, no build number available yet, so try again later
+	    				listener.getLogger().println("waiting for quite period");
+	    				Thread.sleep(1000); 
+	    			}
+	    		}
+    			else { // build is probably in quite period, no build number available yet, so try again later
+    				listener.getLogger().println("waiting for quite period");
+    				Thread.sleep(1000); 
+    			}
+	        }
+        }
+        
+        if (!nextBuildNumberLoadedFromQueueItem) {
+	        // Validate the build number via parameters
+	        foundIt: for (int tries = 3; tries > 0; tries--) {
+	            for (int buildNumber : new SearchPattern(nextBuildNumber, 2)) {
+	                listener.getLogger().println("Checking parameters of #" + buildNumber);
+	                String validateUrlString = this.buildGetUrl(jobName, securityToken) + "/" + buildNumber + "/api/json/";
+	                JSONObject validateResponse = sendHTTPCall(validateUrlString, "GET", build, listener);
+	                if (validateResponse == null) {
+	                    listener.getLogger().println("Query failed.");
+	                    continue;
+	                }
+	                JSONArray actions = validateResponse.getJSONArray("actions");
+	                for (int i = 0; i < actions.size(); i++) {
+	                    JSONObject action = actions.getJSONObject(i);
+	                    if (!action.has("parameters")) continue;
+	                    JSONArray parameters = action.getJSONArray("parameters");
+	                    // Check if the parameters match
+	                    if (compareParameters(listener, parameters, cleanedParams)) {
+	                        // We now have a very high degree of confidence that this is the correct build.
+	                        // It is still possible that this is a false positive if there are no parameters,
+	                        // or multiple jobs use the same parameters.
+	                        nextBuildNumber = buildNumber;
+	                        break foundIt;
+	                    }
+	                    // This is the wrong build
+	                    break;
+	                }
+	
+	                // Sleep for 'pollInterval' seconds.
+	                // Sleep takes miliseconds so need to convert this.pollInterval to milisecopnds (x 1000)
+	                try {
+	                    Thread.sleep(this.pollInterval * 1000);
+	                } catch (InterruptedException e) {
+	                    this.failBuild(e, listener);
+	                }
+	            }
+	        }
         }
         listener.getLogger().println("This job is build #[" + Integer.toString(nextBuildNumber) + "] on the remote server.");
         BuildInfoExporterAction.addBuildInfoExporterAction(build, jobName, nextBuildNumber, Result.NOT_BUILT);
@@ -670,6 +713,21 @@ public class RemoteBuildConfiguration extends Builder {
 
         return true;
     }
+
+	public Optional<String> getLocationFromJobCreateResponse(BuildListener listener,
+			Map<String, List<String>> responseHeaders) {
+		for (String responseHeaderKey : responseHeaders.keySet()) {
+            //listener.getLogger().println("header: " + responseHeaderKey);
+			if ("Location".equalsIgnoreCase(responseHeaderKey)) {
+				List<String> responseHeaderValues = responseHeaders.get(responseHeaderKey);
+				//listener.getLogger().println("header: " + responseHeaderKey + " size = " + responseHeaderValues.size());
+				if (responseHeaderValues.size() == 1) {
+					return Optional.of(responseHeaders.get("Location").get(0));				
+				} 
+			}
+		}
+		return Optional.absent();
+	}
 
     private String findParameter(String parameter, List<String> parameters) {
         for (String search : parameters) {
@@ -796,7 +854,7 @@ public class RemoteBuildConfiguration extends Builder {
     public JSONObject sendHTTPCall(String urlString, String requestType, AbstractBuild build, BuildListener listener)
             throws IOException {
         
-            return sendHTTPCall( urlString, requestType, build, listener, 1 );
+            return sendHTTPCall( urlString, requestType, build, listener, 1 , null);
     }
 
     public String getConsoleOutput(String urlString, String requestType, AbstractBuild build, BuildListener listener, int numberOfAttempts)
@@ -901,11 +959,6 @@ public class RemoteBuildConfiguration extends Builder {
             if (connection != null) {
                 connection.disconnect();
             }
-            // and always clear the query string and remove some "global" values
-            this.clearQueryString();
-            // this.build = null;
-            // this.listener = null;
-
         }
         return consoleOutput;
     }
@@ -920,7 +973,7 @@ public class RemoteBuildConfiguration extends Builder {
      * @return
      * @throws IOException
      */
-    public JSONObject sendHTTPCall(String urlString, String requestType, AbstractBuild build, BuildListener listener, int numberOfAttempts)
+    public JSONObject sendHTTPCall(String urlString, String requestType, AbstractBuild build, BuildListener listener, int numberOfAttempts, Map<String, List<String>> responseHeaders)
             throws IOException {
         RemoteJenkinsServer remoteServer = this.findRemoteHost(this.getRemoteJenkinsName());
         int retryLimit = this.getConnectionRetryLimit();
@@ -935,6 +988,7 @@ public class RemoteBuildConfiguration extends Builder {
         JSONObject responseObject = null;
 
             URL buildUrl = new URL(urlString);
+            listener.getLogger().println("Sending "+requestType+" to: " + urlString);
             connection = (HttpURLConnection) buildUrl.openConnection();
 
             // if there is a username + apiToken defined for this remote host, then use it
@@ -969,12 +1023,25 @@ public class RemoteBuildConfiguration extends Builder {
             connection.setConnectTimeout(5000);
             connection.connect();
             
+
+            listener.getLogger().println("ResponseCode: " + connection.getResponseCode());
             InputStream is;
             try {
                 is = connection.getInputStream();
+                if (is == null) { // when other than 404 error, ex. 401, or 500
+                    listener.getLogger().println("InputStream is null, using ErrorStream");
+                    is = connection.getErrorStream();
+                }
             } catch (FileNotFoundException e) {
                 // In case of a e.g. 404 status
                 is = connection.getErrorStream();
+                if (is == null) {
+                    listener.getLogger().println("ErrorStream is null, is=\"\"");
+                    is = IOUtils.toInputStream("");
+                }
+            }
+            if (responseHeaders != null) {
+            	responseHeaders.putAll(connection.getHeaderFields());
             }
             
             BufferedReader rd = new BufferedReader(new InputStreamReader(is));
@@ -1021,7 +1088,7 @@ public class RemoteBuildConfiguration extends Builder {
  
                 listener.getLogger().println("Retry attempt #" + numberOfAttempts + " out of " + retryLimit );
                 numberOfAttempts++;
-                responseObject = sendHTTPCall(urlString, requestType, build, listener, numberOfAttempts);
+                responseObject = sendHTTPCall(urlString, requestType, build, listener, numberOfAttempts, responseHeaders);
             }else if(numberOfAttempts > retryLimit){
                 //reached the maximum number of retries, time to fail
                 this.failBuild(new Exception("Max number of connection retries have been exeeded."), listener);
@@ -1035,11 +1102,6 @@ public class RemoteBuildConfiguration extends Builder {
             if (connection != null) {
                 connection.disconnect();
             }
-            // and always clear the query string and remove some "global" values
-            this.clearQueryString();
-            // this.build = null;
-            // this.listener = null;
-
         }
         return responseObject;
     }
@@ -1191,21 +1253,6 @@ public class RemoteBuildConfiguration extends Builder {
 
     private List<String> getParameterList() {
         return this.parameterList;
-    }
-
-    public String getQueryString() {
-        return this.queryString;
-    }
-
-    private void setQueryString(String string) {
-        this.queryString = string.trim();
-    }
-
-    /**
-     * Convenience function for setting the query string to empty
-     */
-    private void clearQueryString() {
-        this.setQueryString("");
     }
 
     // Overridden for better type safety.
