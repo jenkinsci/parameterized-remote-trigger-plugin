@@ -27,7 +27,9 @@ import org.jenkinsci.plugins.tokenmacro.MacroEvaluationException;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.StaplerRequest;
 
+import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
+import com.google.common.base.Strings;
 
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
@@ -86,13 +88,10 @@ public class RemoteBuildConfiguration extends Builder {
     private final boolean         loadParamsFromFile;
     private String                parameterFile       = "";
 
-    private String                queryString         = "";
-
     @DataBoundConstructor
     public RemoteBuildConfiguration(String remoteJenkinsName, boolean shouldNotFailBuild, String job, String token,
             String parameters, boolean enhancedLogging, JSONObject overrideAuth, JSONObject loadParamsFromFile, boolean preventRemoteBuildQueue,
             boolean blockBuildUntilComplete, int pollInterval) throws MalformedURLException {
-
         this.token = token.trim();
         this.remoteJenkinsName = remoteJenkinsName;
         this.job = job.trim();
@@ -354,8 +353,8 @@ public class RemoteBuildConfiguration extends Builder {
      * 
      * @param item
      */
-    private void addToQueryString(String item) {
-        String currentQueryString = this.getQueryString();
+    private String addToQueryString(String item, String origQuery) {
+        String currentQueryString = origQuery;
         String newQueryString = "";
 
         if (currentQueryString == null || currentQueryString.equals("")) {
@@ -363,7 +362,7 @@ public class RemoteBuildConfiguration extends Builder {
         } else {
             newQueryString = currentQueryString + "&" + item;
         }
-        this.setQueryString(newQueryString);
+        return (newQueryString);
     }
 
     /**
@@ -383,13 +382,13 @@ public class RemoteBuildConfiguration extends Builder {
     private String buildTriggerUrl(String job, String securityToken, Collection<String> params, boolean isRemoteJobParameterized) {
         RemoteJenkinsServer remoteServer = this.findRemoteHost(this.getRemoteJenkinsName());
         String triggerUrlString = remoteServer.getAddress().toString();
-
+        String queryString = "";
         // start building the proper URL based on known capabiltiies of the remote server
         if (remoteServer.getHasBuildTokenRootSupport()) {
             triggerUrlString += buildTokenRootUrl;
             triggerUrlString += getBuildTypeUrl(isRemoteJobParameterized);
 
-            this.addToQueryString("job=" + this.encodeValue(job));
+            queryString = addToQueryString("job=" + this.encodeValue(job), queryString);
 
         } else {
             triggerUrlString += "/job/";
@@ -399,20 +398,20 @@ public class RemoteBuildConfiguration extends Builder {
 
         // don't try to include a security token in the URL if none is provided
         if (!securityToken.equals("")) {
-            this.addToQueryString("token=" + encodeValue(securityToken));
+        	queryString = addToQueryString("token=" + encodeValue(securityToken), queryString);
         }
 
         // turn our Collection into a query string
         String buildParams = buildUrlQueryString(params);
 
         if (!buildParams.isEmpty()) {
-            this.addToQueryString(buildParams);
+        	queryString = addToQueryString(buildParams, queryString);
         }
 
         // by adding "delay=0", this will (theoretically) force this job to the top of the remote queue
-        this.addToQueryString("delay=0");
+        queryString = addToQueryString("delay=0", queryString);
 
-        triggerUrlString += "?" + this.getQueryString();
+        triggerUrlString += "?" + queryString;
 
         return triggerUrlString;
     }
@@ -437,9 +436,9 @@ public class RemoteBuildConfiguration extends Builder {
         urlString += this.encodeValue(job);
 
         // don't try to include a security token in the URL if none is provided
-        if (!securityToken.equals("")) {
+        /*if (!securityToken.equals("")) {
             this.addToQueryString("token=" + encodeValue(securityToken));
-        }
+        }*/
         return urlString;
     }
 
@@ -479,12 +478,16 @@ public class RemoteBuildConfiguration extends Builder {
         String remoteServerURL = remoteServer.getAddress().toString();
         List<String> cleanedParams = null;
 
+        
         if (this.getLoadParamsFromFile()) {
             cleanedParams = loadExternalParameterFile(build);
         } else {
             // tokenize all variables and encode all variables, then build the fully-qualified trigger URL
             cleanedParams = getCleanedParameters();
+            listener.getLogger().println("Original parameters: " + parameters);
+            listener.getLogger().println("Cleaned parameters: " + Joiner.on(", ").join(cleanedParams));
             cleanedParams = replaceTokens(build, listener, cleanedParams);
+            listener.getLogger().println("Replaced tokens: " + Joiner.on(", ").join(cleanedParams));
         }
 
         String jobName = replaceToken(build, listener, this.getJob());
@@ -561,10 +564,10 @@ public class RemoteBuildConfiguration extends Builder {
         if (queueItemURL.isPresent()) {
 	        int retries = 10;
 	        while (retries > 0 && !done) {	            
-	        	JSONObject queueItem = sendHTTPCall(queueItemURL.get() + "/api/json", "GET", build, listener);
+	        	JSONObject queueItem = sendHTTPCall(queueItemURL.get() + "api/json", "GET", build, listener);
 
-	    		//listener.getLogger().println("queueItem " + queueItem.toString());
-	    		if (queueItem.has("executable")) {
+	    		listener.getLogger().println("queueItem " + queueItem);
+	    		if (queueItem != null && queueItem.has("executable")) {
 	    			JSONObject executable = queueItem.getJSONObject("executable");
 	    			if (!executable.isNullObject()) {
 		    			if (executable.has("number")) {
@@ -579,6 +582,10 @@ public class RemoteBuildConfiguration extends Builder {
 	    				Thread.sleep(1000); 
 	    			}
 	    		}
+    			else { // build is probably in quite period, no build number available yet, so try again later
+    				listener.getLogger().println("waiting for quite period");
+    				Thread.sleep(1000); 
+    			}
 	        }
         }
         
@@ -952,11 +959,6 @@ public class RemoteBuildConfiguration extends Builder {
             if (connection != null) {
                 connection.disconnect();
             }
-            // and always clear the query string and remove some "global" values
-            this.clearQueryString();
-            // this.build = null;
-            // this.listener = null;
-
         }
         return consoleOutput;
     }
@@ -1100,11 +1102,6 @@ public class RemoteBuildConfiguration extends Builder {
             if (connection != null) {
                 connection.disconnect();
             }
-            // and always clear the query string and remove some "global" values
-            this.clearQueryString();
-            // this.build = null;
-            // this.listener = null;
-
         }
         return responseObject;
     }
@@ -1256,21 +1253,6 @@ public class RemoteBuildConfiguration extends Builder {
 
     private List<String> getParameterList() {
         return this.parameterList;
-    }
-
-    public String getQueryString() {
-        return this.queryString;
-    }
-
-    private void setQueryString(String string) {
-        this.queryString = string.trim();
-    }
-
-    /**
-     * Convenience function for setting the query string to empty
-     */
-    private void clearQueryString() {
-        this.setQueryString("");
     }
 
     // Overridden for better type safety.
