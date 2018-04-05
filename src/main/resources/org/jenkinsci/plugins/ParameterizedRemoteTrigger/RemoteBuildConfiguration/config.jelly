@@ -1,55 +1,56 @@
+<?jelly escape-by-default='true'?>
 <j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form">
 
-<f:section title="Server Info">
-  <f:entry title="Select a remote host" >
-    <f:select field="remoteJenkinsName" />
-  </f:entry>
+    <f:section title="Server Info">
+        <f:entry title="Select a remote host" >
+            <f:select field="remoteJenkinsName" />
+        </f:entry>
 
-  <f:optionalBlock title="Override credentials" field="overrideAuth">
-    <f:entry title="Override Authentication">
-       <f:repeatableProperty field="auth" noAddButton="true" minimum="1" />
-    </f:entry>
-  </f:optionalBlock>
-</f:section>
+        <f:entry title="Override remote host URL" field="remoteJenkinsUrl">
+            <f:textbox />
+        </f:entry>
 
-<f:section title="Job Info">
-  <f:entry title="Do not fail if remote fails" field="shouldNotFailBuild">
-    <f:checkbox />
-  </f:entry>
-  
-  <f:entry title="Wait to trigger remote builds until no other builds are running." field="preventRemoteBuildQueue">
-    <f:checkbox />
-  </f:entry>
-  
-  <f:entry title="Poll Interval (seconds)" field="pollInterval">
-     <f:number clazz="positive-number" min="1" step="1" default="10" />
-  </f:entry>
+        <f:dropdownDescriptorSelector field="auth2" title="Override credentials" descriptors="${descriptor.getAuth2Descriptors()}" default="${descriptor.getDefaultAuth2Descriptor()}"/>
+    </f:section>
 
-  <f:entry title="Block until the remote triggered projects finish their builds." field="blockBuildUntilComplete">
-    <f:checkbox />
-  </f:entry>
-    
-  <f:entry title="Remote Job Name" field="job">
-    <f:textbox />
-  </f:entry>
+    <f:section title="Job Info">
+        <f:entry title="Do not fail if remote fails" field="shouldNotFailBuild">
+            <f:checkbox />
+        </f:entry>
 
-  <f:entry title="Token" field="token">
-    <f:textbox />
-  </f:entry>
+        <f:entry title="Wait to trigger remote builds until no other builds are running." field="preventRemoteBuildQueue">
+            <f:checkbox />
+        </f:entry>
 
-  <f:entry title="Parameters" field="parameters">
-    <f:textarea />
-  </f:entry>
-  
-  <f:entry title="Enable enhanced logging" field="enhancedLogging">
-    <f:checkbox />
-  </f:entry>
+        <f:entry title="Poll Interval (seconds)" field="pollInterval">
+             <f:number clazz="positive-number" min="1" step="1" default="10" />
+        </f:entry>
 
-  <f:optionalBlock title="Load parameters from external file (this will cause the job to ignore the text field above)" field="loadParamsFromFile">
-    <f:entry title="Parameter file path + name (all paths are relative to the current workspace)" field="parameterFile">
-       <f:textbox />
-    </f:entry>
-  </f:optionalBlock>
-</f:section>
+        <f:entry title="Block until the remote triggered projects finish their builds." field="blockBuildUntilComplete">
+            <f:checkbox />
+        </f:entry>
+
+        <f:entry title="Remote Job Name or URL" field="job">
+            <f:textbox />
+        </f:entry>
+
+        <f:entry title="Token" field="token">
+            <f:password />
+        </f:entry>
+
+        <f:entry title="Parameters" field="parameters">
+            <f:textarea />
+        </f:entry>
+
+        <f:entry title="Enable enhanced logging" field="enhancedLogging">
+            <f:checkbox />
+        </f:entry>
+
+        <f:optionalBlock title="Load parameters from external file (this will cause the job to ignore the text field above)" field="loadParamsFromFile" inline="true">
+            <f:entry title="Parameter file path + name (all paths are relative to the current workspace)" field="parameterFile">
+                <f:textbox />
+            </f:entry>
+        </f:optionalBlock>
+    </f:section>
 
 </j:jelly>
