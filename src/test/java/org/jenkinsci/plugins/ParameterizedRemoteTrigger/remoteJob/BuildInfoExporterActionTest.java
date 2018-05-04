@@ -20,6 +20,7 @@ import hudson.EnvVars;
 import hudson.model.FreeStyleBuild;
 import hudson.model.FreeStyleProject;
 import hudson.model.ItemGroup;
+import hudson.model.Result;
 import hudson.model.Run;
 import hudson.model.TopLevelItem;
 import jenkins.model.Jenkins;
@@ -39,8 +40,9 @@ public class BuildInfoExporterActionTest {
     @Test
     public void testAddBuildInfoExporterAction_sequential() throws IOException {
         Run<?, ?> parentBuild = new FreeStyleBuild(new FreeStyleProject((ItemGroup<TopLevelItem>) Jenkins.getInstance(), "ParentJob"));
+        BuildInfo buildInfo = new BuildInfo(Result.SUCCESS);
         for (int i = 1; i <= PARALLEL_JOBS; i++) {
-            BuildInfoExporterAction.addBuildInfoExporterAction(parentBuild, "Job" + i, i, new URL("http://jenkins/jobs/Job" + i), BuildStatus.SUCCESS);
+            BuildInfoExporterAction.addBuildInfoExporterAction(parentBuild, "Job" + i, i, new URL("http://jenkins/jobs/Job" + i), buildInfo);
         }
         BuildInfoExporterAction action = parentBuild.getAction(BuildInfoExporterAction.class);
         EnvVars env = new EnvVars();
@@ -135,8 +137,9 @@ public class BuildInfoExporterActionTest {
 
         public Boolean call() throws MalformedURLException {
             String jobName = "Job" + i;
+            BuildInfo buildInfo = new BuildInfo(Result.SUCCESS);
             BuildInfoExporterAction.addBuildInfoExporterAction(parentBuild, jobName, i,
-                    new URL("http://jenkins/jobs/Job" + i), BuildStatus.SUCCESS);
+                    new URL("http://jenkins/jobs/Job" + i), buildInfo);
             System.out.println("AddActionCallable finished for Job" + i);
 
             BuildInfoExporterAction action = parentBuild.getAction(BuildInfoExporterAction.class);

@@ -33,8 +33,8 @@ public class BuildInfoExporterAction implements EnvironmentContributingAction {
         addBuildReferenceSafe(buildRef);
     }
 
-    public static BuildInfoExporterAction addBuildInfoExporterAction(@Nonnull Run<?, ?> parentBuild, String triggeredProjectName, int buildNumber, URL jobURL, BuildStatus buildResult) {
-        BuildReference reference = new BuildReference(triggeredProjectName, buildNumber, jobURL, buildResult);
+    public static BuildInfoExporterAction addBuildInfoExporterAction(@Nonnull Run<?, ?> parentBuild, String triggeredProjectName, int buildNumber, URL jobURL, BuildInfo buildInfo) {
+        BuildReference reference = new BuildReference(triggeredProjectName, buildNumber, jobURL, buildInfo);
 
         BuildInfoExporterAction action;
         synchronized(parentBuild) {
@@ -86,13 +86,13 @@ public class BuildInfoExporterAction implements EnvironmentContributingAction {
     public static class BuildReference {
         public final String projectName;
         public final int buildNumber;
-        public final BuildStatus buildResult;
+        public final BuildInfo buildInfo;
         public final URL jobURL;
 
-        public BuildReference(String projectName, int buildNumber, URL jobURL, BuildStatus buildResult) {
+        public BuildReference(String projectName, int buildNumber, URL jobURL, BuildInfo buildInfo) {
             this.projectName = projectName;
             this.buildNumber = buildNumber;
-            this.buildResult = buildResult;
+            this.buildInfo = buildInfo;
             this.jobURL = jobURL;
         }
     }
@@ -122,7 +122,7 @@ public class BuildInfoExporterAction implements EnvironmentContributingAction {
             for (BuildReference br : refs) {
                 if (br.buildNumber != 0) {
                     String tiggeredBuildRunResultKey = BUILD_RESULT_VARIABLE_PREFIX + sanatizedProjectName + RUN + Integer.toString(br.buildNumber);
-                    env.put(tiggeredBuildRunResultKey, br.buildResult.toString());
+                    env.put(tiggeredBuildRunResultKey, br.buildInfo.getResult().toString());
                 }
             }
             BuildReference lastBuild = null;
@@ -136,7 +136,7 @@ public class BuildInfoExporterAction implements EnvironmentContributingAction {
                 env.put(JOB_NAME_VARIABLE, lastBuild.projectName);
                 env.put(BUILD_NUMBER_VARIABLE_PREFIX + sanatizedProjectName, Integer.toString(lastBuild.buildNumber));
                 env.put(BUILD_URL_VARIABLE_PREFIX + sanatizedProjectName, lastBuild.jobURL.toString());
-                env.put(BUILD_RESULT_VARIABLE_PREFIX + sanatizedProjectName, lastBuild.buildResult.toString());
+                env.put(BUILD_RESULT_VARIABLE_PREFIX + sanatizedProjectName, lastBuild.buildInfo.getResult().toString());
             }
         }
     }
