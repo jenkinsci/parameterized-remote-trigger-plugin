@@ -20,6 +20,7 @@ import org.jenkinsci.plugins.ParameterizedRemoteTrigger.RemoteBuildConfiguration
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.RemoteJenkinsServer;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.BuildData;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.RemoteBuildInfo;
+import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.RemoteBuildQueueStatus;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.RemoteBuildStatus;
 import org.jenkinsci.plugins.scriptsecurity.sandbox.whitelists.Whitelisted;
 
@@ -40,12 +41,7 @@ public class Handle implements Serializable {
 
     @Nonnull
     private final RemoteBuildConfiguration remoteBuildConfiguration;
-    @Nonnull
-    private final String queueId;
 
-    //Available once moved from queue to an executor
-    @Nullable
-    private BuildData buildData;
     @Nonnull
     private RemoteBuildInfo buildInfo;
 
@@ -80,13 +76,11 @@ public class Handle implements Serializable {
     private String lastLog;
 
 
-    public Handle(@Nonnull RemoteBuildConfiguration remoteBuildConfiguration, @Nonnull String queueId, @Nonnull String currentItem,
+    public Handle(@Nonnull RemoteBuildConfiguration remoteBuildConfiguration, @Nonnull RemoteBuildInfo buildInfo, @Nonnull String currentItem,
         @Nonnull RemoteJenkinsServer effectiveRemoteServer, @Nonnull JSONObject remoteJobMetadata)
     {
         this.remoteBuildConfiguration = remoteBuildConfiguration;
-        this.queueId = queueId;
-        this.buildData = null;
-        this.buildInfo = new RemoteBuildInfo();
+        this.buildInfo = buildInfo;
         this.jobName = getParameterFromJobMetadata(remoteJobMetadata, "name");
         this.jobFullName = getParameterFromJobMetadata(remoteJobMetadata, "fullName");
         this.jobDisplayName = getParameterFromJobMetadata(remoteJobMetadata, "displayName");
@@ -109,17 +103,7 @@ public class Handle implements Serializable {
      */
     @Whitelisted
     public boolean isQueued() throws IOException, InterruptedException {
-        //Return if we already have the buildData
-        if(buildData != null) return false;
-
-        PrintStreamWrapper log = new PrintStreamWrapper();
-        try {
-            //TODO: This currently blocks
-            getBuildData(queueId, log.getPrintStream());
-            return false;
-        } finally {
-            lastLog = log.getContent();
-        }
+        return buildInfo.getQueueStatus() == RemoteBuildQueueStatus.QUEUED;
     }
 
     /**
@@ -177,66 +161,35 @@ public class Handle implements Serializable {
     }
 
     /**
-     * @return the name of the remote job.
+     * @return the id of the remote job on the queue.
      */
-    @Nonnull
+    @CheckForNull
     public String getQueueId() {
-        return queueId;
+        return buildInfo.getQueueId();
     }
 
     /**
      * Get the build URL of the remote build.
      *
      * @return the URL, or null if it could not be identified (yet).
-     * @throws IOException
-     *            if there is an error retrieving the remote build number, or,
-     *            if there is an error retrieving the remote build status, or,
-     *            if there is an error retrieving the console output of the remote build, or,
-     *            if the remote build does not succeed.
-     * @throws InterruptedException
-     *            if any thread has interrupted the current thread.
      */
-    @Nonnull
+    @CheckForNull
     @Whitelisted
-    public URL getBuildUrl() throws IOException, InterruptedException {
-        //Return if we already have the buildData
-        if(buildData != null) return buildData.getURL();
-
-        PrintStreamWrapper log = new PrintStreamWrapper();
-        try {
-            //TODO: This currently blocks
-            BuildData buildData = getBuildData(queueId, log.getPrintStream());
-            return buildData.getURL();
-        } finally {
-            lastLog = log.getContent();
-        }
+    public URL getBuildUrl() {
+        BuildData buildData = buildInfo.getBuildData();
+        return buildData == null ? null : buildData.getURL();
     }
 
     /**
      * Get the build number of the remote build.
      *
      * @return the number, or -1 if it could not be identified (yet).
-     * @throws IOException
-     *            if there is an error retrieving the remote build number, or,
-     *            if there is an error retrieving the remote build status, or,
-     *            if there is an error retrieving the console output of the remote build, or,
-     *            if the remote build does not succeed.
-     * @throws InterruptedException
-     *            if any thread has interrupted the current thread.
      */
+    @Nonnull
     @Whitelisted
-    public int getBuildNumber() throws IOException, InterruptedException {
-        //Return if we already have the buildData
-        if(buildData != null) return buildData.getBuildNumber();
-
-        PrintStreamWrapper log = new PrintStreamWrapper();
-        try {
-            //TODO: This currently blocks
-            BuildData buildData = getBuildData(queueId, log.getPrintStream());
-            return buildData.getBuildNumber();
-        } finally {
-            lastLog = log.getContent();
-        }
+    public int getBuildNumber() {
+        BuildData buildData = buildInfo.getBuildData();
+        return buildData == null ? -1 : buildData.getBuildNumber();
     }
 
     /**
@@ -254,6 +207,17 @@ public class Handle implements Serializable {
      * Gets the current build status of the remote job.
      *
      * @return {@link hudson.model.Result} the build result
+     */
+    @Nonnull
+    @Whitelisted
+    public RemoteBuildStatus getBuildStatus() {
+        return buildInfo.getStatus();
+    }
+
+    /**
+     * Updates the current build status of the remote job.
+     *
+     * @return {@link hudson.model.Result} the build result
      *
      * @throws IOException
      *            if there is an error retrieving the remote build number, or,
@@ -265,12 +229,12 @@ public class Handle implements Serializable {
      */
     @Nonnull
     @Whitelisted
-    public RemoteBuildStatus getBuildStatus() throws IOException, InterruptedException {
-        return getBuildStatus(false);
+    public RemoteBuildStatus updateBuildStatus() throws IOException, InterruptedException {
+        return updateBuildStatus(false);
     }
 
     /**
-     * Gets the build status of the remote build and <b>blocks</b> until it finished.
+     * Updates the build status of the remote build until it is finished.
      *
      * @return {@link org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.RemoteBuildStatus} the build status
      * @throws IOException
@@ -283,23 +247,20 @@ public class Handle implements Serializable {
      */
     @Nonnull
     @Whitelisted
-    public RemoteBuildStatus getBuildStatusBlocking() throws IOException, InterruptedException {
-        return getBuildStatus(true);
+    public RemoteBuildStatus updateBuildStatusBlocking() throws IOException, InterruptedException {
+        return updateBuildStatus(true);
     }
 
     @Nonnull
-    private RemoteBuildStatus getBuildStatus(boolean blockUntilFinished) throws IOException, InterruptedException {
+    private RemoteBuildStatus updateBuildStatus(boolean blockUntilFinished) throws IOException, InterruptedException {
       //Return if buildStatus exists and is final (does not change anymore)
       if(buildInfo.getStatus() == RemoteBuildStatus.FINISHED) return buildInfo.getStatus();
 
       PrintStreamWrapper log = new PrintStreamWrapper();
       try {
           while(buildInfo.getStatus() != RemoteBuildStatus.FINISHED) {
-              //TODO: This currently blocks
-              BuildData buildData = getBuildData(queueId, log.getPrintStream());
-              String jobLocation = buildData.getURL() + "api/json/";
               BuildContext context = new BuildContext(log.getPrintStream(), effectiveRemoteServer, this.currentItem);
-              buildInfo = remoteBuildConfiguration.getBuildInfo(jobLocation, context);
+              buildInfo = remoteBuildConfiguration.updateBuildInfo(buildInfo, context);
               if(!blockUntilFinished) break;
           }
           return buildInfo.getStatus();
@@ -339,18 +300,14 @@ public class Handle implements Serializable {
         return log;
     }
 
-    public void setBuildData(BuildData buildData)
-    {
-        this.buildData = buildData;
-    }
-
     @Whitelisted
     @Override
     public String toString() {
 
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("Handle [job=%s, remoteServerURL=%s, queueId=%s", remoteBuildConfiguration.getJob(), effectiveRemoteServer.getAddress(), queueId));
-        if(buildInfo != null) sb.append(String.format(", %s", buildInfo.toString()));
+        sb.append(String.format("Handle [job=%s, remoteServerURL=%s, queueId=%s", remoteBuildConfiguration.getJob(), effectiveRemoteServer.getAddress(), buildInfo.getQueueId()));
+        sb.append(String.format(", %s", buildInfo.toString()));
+        BuildData buildData = buildInfo.getBuildData();
         if(buildData != null) sb.append(String.format(", buildNumber=%s, buildUrl=%s", buildData.getBuildNumber(), buildData.getURL()));
         sb.append("]");
         return sb.toString();
@@ -381,16 +338,10 @@ public class Handle implements Serializable {
         return sb.toString();
     }
 
-    @Nonnull
-    private BuildData getBuildData(String queueId, PrintStream logger) throws IOException, InterruptedException
+    @CheckForNull
+    private BuildData getBuildData(String queueId, PrintStream logger)
     {
-        //Return if we already have the buildData
-        if(buildData != null) return buildData;
-
-        BuildContext context = new BuildContext(logger, effectiveRemoteServer, this.currentItem);
-        BuildData build = remoteBuildConfiguration.getBuildData(queueId, context);
-        this.buildData = build;
-        return build;
+        return buildInfo.getBuildData();
     }
 
     /**

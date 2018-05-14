@@ -46,6 +46,7 @@ import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.RemoteBuildInf
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.BuildInfoExporterAction;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.QueueItem;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.QueueItemData;
+import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.RemoteBuildQueueStatus;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.RemoteBuildStatus;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.utils.FormValidationUtils;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.utils.FormValidationUtils.AffectedField;
@@ -693,12 +694,16 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
 
         }
 
+        RemoteBuildInfo buildInfo = new RemoteBuildInfo(); // QueueStatus.NOT_QUEUED
+
         context.logger.println("Triggering remote job now.");
 
         ConnectionResponse responseRemoteJob = sendHTTPCall(triggerUrlString, "POST", context, 1);
         QueueItem queueItem = new QueueItem(responseRemoteJob.getHeader());
+        buildInfo.setQueueId(queueItem.getId()); // QueueStatus.QUEUED
+        buildInfo = updateBuildInfo(buildInfo, context);
 
-        return new Handle(this, queueItem.getId(), context.currentItem, context.effectiveRemoteServer, remoteJobMetadata);
+        return new Handle(this, buildInfo, context.currentItem, context.effectiveRemoteServer, remoteJobMetadata);
     }
 
     /**
@@ -720,29 +725,44 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
         throws InterruptedException, IOException
     {
         String jobName = handle.getJobName();
-        BuildData buildData = getBuildData(handle.getQueueId(), context);
-        handle.setBuildData(buildData);
 
-        context.logger.println("  Remote build URL: " + buildData.getURL());
-        context.logger.println("  Remote build number: " + buildData.getBuildNumber());
+        RemoteBuildInfo buildInfo = handle.getBuildInfo();
+        String queueId = buildInfo.getQueueId();
+        if (queueId == null) {
+            throw new AbortException(String.format("Unexpected status: %s. The queue id was not found.", buildInfo.toString()));
+        }
+        context.logger.println("  Remote job queue number: " + buildInfo.getQueueId());
+
+        if (buildInfo.getQueueStatus() == RemoteBuildQueueStatus.QUEUED) {
+            context.logger.println("Waiting for remote build to be executed...");
+        }
+
+        while (buildInfo.getQueueStatus() == RemoteBuildQueueStatus.QUEUED)
+        {
+            context.logger.println("Waiting for " + this.pollInterval + " seconds until next poll.");
+            Thread.sleep(this.pollInterval * 1000);
+            buildInfo = updateBuildInfo(buildInfo, context);
+            handle.setBuildInfo(buildInfo);
+        }
+
+        BuildData buildData = buildInfo.getBuildData();
+        if (buildData == null) {
+            throw new AbortException(String.format("Unexpected status: %s", buildInfo.toString()));
+        }
 
         int jobNumber = buildData.getBuildNumber();
         URL jobURL = buildData.getURL();
 
-        // Stores the status of the remote build
-        RemoteBuildInfo buildInfo = new RemoteBuildInfo();
-        handle.setBuildInfo(buildInfo);
+        context.logger.println("  Remote build URL: " + jobURL);
+        context.logger.println("  Remote build number: " + jobNumber);
 
         if(context.run != null) BuildInfoExporterAction.addBuildInfoExporterAction(context.run, jobName, jobNumber, jobURL, buildInfo);
 
         // If we are told to block until remoteBuildComplete:
         if (this.getBlockBuildUntilComplete()) {
           context.logger.println("Blocking local job until remote job completes.");
-          // Form the URL for the triggered job
-          // Only avoid url cache while loop inquiry
-          String jobLocation = String.format("%sapi/json/?seed=%d", jobURL, System.currentTimeMillis());
 
-          buildInfo = getBuildInfo(jobLocation, context);
+          buildInfo = updateBuildInfo(buildInfo, context);
           handle.setBuildInfo(buildInfo);
 
           if (buildInfo.getStatus() == RemoteBuildStatus.NOT_STARTED)
@@ -758,7 +778,7 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
               } catch (InterruptedException e) {
                   this.failBuild(e, context.logger);
               }
-              buildInfo = getBuildInfo(jobLocation, context);
+              buildInfo = updateBuildInfo(buildInfo, context);
               handle.setBuildInfo(buildInfo);
           }
 
@@ -777,7 +797,7 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
               } catch (InterruptedException e) {
                   this.failBuild(e, context.logger);
               }
-              buildInfo = getBuildInfo(jobLocation, context);
+              buildInfo = updateBuildInfo(buildInfo, context);
               handle.setBuildInfo(buildInfo);
           }
           context.logger.println("Remote build finished with status " + buildInfo.getResult().toString() + ".");
@@ -834,7 +854,7 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
           throw new AbortException(String.format("Unexpected queue item response: code %s for request %s", response.getResponseCode(), queueQuery));
       }
 
-      QueueItemData queueItem = new QueueItemData(queueResponse);
+      QueueItemData queueItem = new QueueItemData(context, queueResponse);
 
       if (queueItem.isBlocked())
         context.logger.println("The remote job is blocked. Reason: " + queueItem.getWhy() + ".");
@@ -851,65 +871,45 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
       return queueItem;
     }
 
-    /**
-     * Requests the queue item data till the job is executable and the build data can be retrieved.
-     *
-     * @param queueId
-     *            the id of the remote job on the queue.
-     * @param context
-     *            the context of this Builder/BuildStep.
-     * @return {@link BuildData}
-     *            the build data containing the build number and build URL.
-     * @throws InterruptedException
-     *            if any thread has interrupted the current thread.
-     * @throws IOException
-     *            if there is an error identifying the remote host, or
-     *            if there is an error setting the authorization header, or
-     *            if the request fails due to an unknown host, unauthorized credentials, or another reason.
-     * @throws AbortException
-     *            if the queue item response is unexpected.
-     * @throws MalformedURLException
-     *            if there is an error creating the build URL.
-     */
     @Nonnull
-    public BuildData getBuildData(@Nonnull String queueId, @Nonnull BuildContext context)
-            throws IOException, InterruptedException, AbortException, MalformedURLException
-    {
-        context.logger.println("  Remote job queue number: " + queueId);
+    public RemoteBuildInfo updateBuildInfo(@Nonnull RemoteBuildInfo buildInfo, @Nonnull BuildContext context) throws IOException {
 
-        QueueItemData queueItem = getQueueItemData(queueId, context);
-        BuildData buildData = queueItem.getBuildData(context);
+        if (buildInfo.getQueueStatus() == RemoteBuildQueueStatus.NOT_QUEUED) return buildInfo;
 
-        context.logger.println("Waiting for remote build to be executed...");
-
-        while (buildData == null)
-        {
-            context.logger.println("Waiting for " + this.pollInterval + " seconds until next poll.");
-            Thread.sleep(this.pollInterval * 1000);
-            queueItem = getQueueItemData(queueId, context);
-            buildData = queueItem.getBuildData(context);
+        if (buildInfo.getQueueStatus() == RemoteBuildQueueStatus.QUEUED) {
+            String queueId = buildInfo.getQueueId();
+            if (queueId == null) {
+                throw new AbortException(String.format("Unexpected status: %s. The queue id was not found.", buildInfo.toString()));
+            }
+            QueueItemData queueItem = getQueueItemData(queueId, context);
+            BuildData buildData = queueItem.getBuildData(context);
+            if (queueItem.isExecutable() && buildData!=null) {
+                buildInfo.setBuildData(buildData);  // QueueStatus.EXECUTED
+            }
+            return buildInfo;
         }
-        return buildData;
-    }
 
-    @Nonnull
-    public RemoteBuildInfo getBuildInfo(@Nonnull String buildUrlString, @Nonnull BuildContext context) throws IOException {
-
+        // QueueStatus.EXECUTED
+        BuildData buildData = buildInfo.getBuildData();
+        if (buildData == null) {
+            throw new AbortException(String.format("Unexpected status: %s", buildInfo.toString()));
+        }
+        String buildUrlString = buildData.getURL() + "api/json/";
         JSONObject responseObject = sendHTTPCall(buildUrlString, "GET", context);
 
         try {
             if (responseObject == null || responseObject.getString("result") == null && !responseObject.getBoolean("building")) {
-                return new RemoteBuildInfo(RemoteBuildStatus.NOT_STARTED);
+                return buildInfo;
             } else if (responseObject.getBoolean("building")) {
-                return new RemoteBuildInfo(RemoteBuildStatus.RUNNING);
+                buildInfo.setBuildStatus(RemoteBuildStatus.RUNNING);
             } else if (responseObject.getString("result") != null) {
-                return new RemoteBuildInfo(responseObject.getString("result"));
+                buildInfo.setBuildResult(responseObject.getString("result"));
             } else {
                 context.logger.println("WARNING: Unhandled condition!");
             }
         } catch (Exception ex) {
         }
-        return new RemoteBuildInfo(RemoteBuildStatus.NOT_STARTED);
+        return buildInfo;
     }
 
     private String getConsoleOutput(URL url, BuildContext context)

@@ -36,10 +36,12 @@ public class QueueItem
         }
     }
 
+    @Nonnull
     public String getLocation() {
         return location;
     }
 
+    @Nonnull
     public String getId() {
         return id;
     }

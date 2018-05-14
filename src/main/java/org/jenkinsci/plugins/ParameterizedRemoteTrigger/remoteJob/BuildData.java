@@ -25,16 +25,19 @@ public class BuildData implements Serializable
         this.buildURL = buildURL;
     }
 
+    @Nonnull
     public int getBuildNumber()
     {
         return buildNumber;
     }
 
+    @Nonnull
     public URL getURL()
     {
         return buildURL;
     }
 
+    @Nonnull
     @Override
     public String toString()
     {

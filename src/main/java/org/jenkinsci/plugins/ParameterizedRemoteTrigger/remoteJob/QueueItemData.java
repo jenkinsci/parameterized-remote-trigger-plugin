@@ -20,10 +20,15 @@ public class QueueItemData
     @Nonnull
     private final JSONObject queueResponse;
 
+    @Nonnull
+    private RemoteBuildQueueStatus status;
 
-    public QueueItemData(@Nonnull JSONObject queueResponse)
+
+    public QueueItemData(@Nonnull BuildContext context, @Nonnull JSONObject queueResponse) throws MalformedURLException
     {
         this.queueResponse = queueResponse;
+        if (isExecutable() && getBuildData(context)!=null) status = RemoteBuildQueueStatus.EXECUTED;
+        else status = RemoteBuildQueueStatus.QUEUED;
     }
 
     public boolean isBlocked()
@@ -56,6 +61,9 @@ public class QueueItemData
         return (!isBlocked() && !isBuildable() && !isPending() && !isCancelled());
     }
 
+    public RemoteBuildQueueStatus getQueueStatus() {
+        return status;
+    }
     /**
      * When a queue item is <b>executable</b>, the build number and the build URL
      * of the remote job are available in the queue item data.
@@ -75,6 +83,7 @@ public class QueueItemData
         JSONObject remoteJobInfo;
         try {
             remoteJobInfo = queueResponse.getJSONObject("executable");
+            if (remoteJobInfo == null) return null;
         } catch (JSONException e) {
             context.logger.println("The attribute \"executable\" was not found. Unexpected response: " + queueResponse.toString());
             return null;
