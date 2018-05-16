@@ -33,7 +33,7 @@ public class BuildInfoExporterAction implements EnvironmentContributingAction {
         addBuildReferenceSafe(buildRef);
     }
 
-    public static BuildInfoExporterAction addBuildInfoExporterAction(@Nonnull Run<?, ?> parentBuild, String triggeredProjectName, int buildNumber, URL jobURL, BuildInfo buildInfo) {
+    public static BuildInfoExporterAction addBuildInfoExporterAction(@Nonnull Run<?, ?> parentBuild, String triggeredProjectName, int buildNumber, URL jobURL, RemoteBuildInfo buildInfo) {
         BuildReference reference = new BuildReference(triggeredProjectName, buildNumber, jobURL, buildInfo);
 
         BuildInfoExporterAction action;
@@ -86,10 +86,10 @@ public class BuildInfoExporterAction implements EnvironmentContributingAction {
     public static class BuildReference {
         public final String projectName;
         public final int buildNumber;
-        public final BuildInfo buildInfo;
+        public final RemoteBuildInfo buildInfo;
         public final URL jobURL;
 
-        public BuildReference(String projectName, int buildNumber, URL jobURL, BuildInfo buildInfo) {
+        public BuildReference(String projectName, int buildNumber, URL jobURL, RemoteBuildInfo buildInfo) {
             this.projectName = projectName;
             this.buildNumber = buildNumber;
             this.buildInfo = buildInfo;

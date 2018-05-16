@@ -3,7 +3,7 @@ package org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob;
 /**
  * The build status of a remote build.
  */
-public enum BuildStatus
+public enum RemoteBuildStatus
 {
 
     /**
@@ -25,7 +25,7 @@ public enum BuildStatus
     private final String id;
 
 
-    private BuildStatus(String id) {
+    private RemoteBuildStatus(String id) {
         this.id = id;
     }
 

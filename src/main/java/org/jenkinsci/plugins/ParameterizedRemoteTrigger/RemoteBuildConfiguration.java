@@ -42,11 +42,11 @@ import org.jenkinsci.plugins.ParameterizedRemoteTrigger.exceptions.ForbiddenExce
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.exceptions.UnauthorizedException;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.pipeline.Handle;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.BuildData;
-import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.BuildInfo;
+import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.RemoteBuildInfo;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.BuildInfoExporterAction;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.QueueItem;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.QueueItemData;
-import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.BuildStatus;
+import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.RemoteBuildStatus;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.utils.FormValidationUtils;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.utils.FormValidationUtils.AffectedField;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.utils.FormValidationUtils.RemoteURLCombinationsResult;
@@ -730,7 +730,7 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
         URL jobURL = buildData.getURL();
 
         // Stores the status of the remote build
-        BuildInfo buildInfo = new BuildInfo();
+        RemoteBuildInfo buildInfo = new RemoteBuildInfo();
         handle.setBuildInfo(buildInfo);
 
         if(context.run != null) BuildInfoExporterAction.addBuildInfoExporterAction(context.run, jobName, jobNumber, jobURL, buildInfo);
@@ -745,10 +745,10 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
           buildInfo = getBuildInfo(jobLocation, context);
           handle.setBuildInfo(buildInfo);
 
-          if (buildInfo.getStatus() == BuildStatus.NOT_STARTED)
+          if (buildInfo.getStatus() == RemoteBuildStatus.NOT_STARTED)
             context.logger.println("Waiting for remote build to start ...");
 
-          while (buildInfo.getStatus() == BuildStatus.NOT_STARTED) {
+          while (buildInfo.getStatus() == RemoteBuildStatus.NOT_STARTED) {
             context.logger.println("  Waiting for " + this.pollInterval + " seconds until next poll.");
               // Sleep for 'pollInterval' seconds.
               // Sleep takes miliseconds so need to convert this.pollInterval to milisecopnds (x 1000)
@@ -762,12 +762,12 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
               handle.setBuildInfo(buildInfo);
           }
 
-          if (buildInfo.getStatus() == BuildStatus.RUNNING) {
+          if (buildInfo.getStatus() == RemoteBuildStatus.RUNNING) {
             context.logger.println("Remote build started!");
             context.logger.println("Waiting for remote build to finish ...");
           }
 
-          while (buildInfo.getStatus() == BuildStatus.RUNNING) {
+          while (buildInfo.getStatus() == RemoteBuildStatus.RUNNING) {
             context.logger.println("  Waiting for " + this.pollInterval + " seconds until next poll.");
               // Sleep for 'pollInterval' seconds.
               // Sleep takes miliseconds so need to convert this.pollInterval to milisecopnds (x 1000)
@@ -893,23 +893,23 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
     }
 
     @Nonnull
-    public BuildInfo getBuildInfo(@Nonnull String buildUrlString, @Nonnull BuildContext context) throws IOException {
+    public RemoteBuildInfo getBuildInfo(@Nonnull String buildUrlString, @Nonnull BuildContext context) throws IOException {
 
         JSONObject responseObject = sendHTTPCall(buildUrlString, "GET", context);
 
         try {
             if (responseObject == null || responseObject.getString("result") == null && !responseObject.getBoolean("building")) {
-                return new BuildInfo(BuildStatus.NOT_STARTED);
+                return new RemoteBuildInfo(RemoteBuildStatus.NOT_STARTED);
             } else if (responseObject.getBoolean("building")) {
-                return new BuildInfo(BuildStatus.RUNNING);
+                return new RemoteBuildInfo(RemoteBuildStatus.RUNNING);
             } else if (responseObject.getString("result") != null) {
-                return new BuildInfo(responseObject.getString("result"));
+                return new RemoteBuildInfo(responseObject.getString("result"));
             } else {
                 context.logger.println("WARNING: Unhandled condition!");
             }
         } catch (Exception ex) {
         }
-        return new BuildInfo(BuildStatus.NOT_STARTED);
+        return new RemoteBuildInfo(RemoteBuildStatus.NOT_STARTED);
     }
 
     private String getConsoleOutput(URL url, BuildContext context)

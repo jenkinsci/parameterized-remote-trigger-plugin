@@ -19,8 +19,8 @@ import org.jenkinsci.plugins.ParameterizedRemoteTrigger.BuildContext;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.RemoteBuildConfiguration;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.RemoteJenkinsServer;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.BuildData;
-import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.BuildInfo;
-import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.BuildStatus;
+import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.RemoteBuildInfo;
+import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.RemoteBuildStatus;
 import org.jenkinsci.plugins.scriptsecurity.sandbox.whitelists.Whitelisted;
 
 import hudson.model.Result;
@@ -47,7 +47,7 @@ public class Handle implements Serializable {
     @Nullable
     private BuildData buildData;
     @Nonnull
-    private BuildInfo buildInfo;
+    private RemoteBuildInfo buildInfo;
 
     @Nullable
     private String jobName;
@@ -86,7 +86,7 @@ public class Handle implements Serializable {
         this.remoteBuildConfiguration = remoteBuildConfiguration;
         this.queueId = queueId;
         this.buildData = null;
-        this.buildInfo = new BuildInfo();
+        this.buildInfo = new RemoteBuildInfo();
         this.jobName = getParameterFromJobMetadata(remoteJobMetadata, "name");
         this.jobFullName = getParameterFromJobMetadata(remoteJobMetadata, "fullName");
         this.jobDisplayName = getParameterFromJobMetadata(remoteJobMetadata, "displayName");
@@ -136,7 +136,7 @@ public class Handle implements Serializable {
      */
     @Whitelisted
     public boolean isFinished() throws IOException, InterruptedException {
-        return buildInfo.getStatus() == BuildStatus.FINISHED;
+        return buildInfo.getStatus() == RemoteBuildStatus.FINISHED;
     }
 
     /**
@@ -242,11 +242,11 @@ public class Handle implements Serializable {
     /**
      * Gets the current build info of the remote job, containing build status and build result.
      *
-     * @return {@link org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.BuildInfo} the build info
+     * @return {@link org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.RemoteBuildInfo} the build info
      */
     @Nonnull
     @Whitelisted
-    public BuildInfo getBuildInfo() {
+    public RemoteBuildInfo getBuildInfo() {
         return buildInfo;
     }
 
@@ -265,14 +265,14 @@ public class Handle implements Serializable {
      */
     @Nonnull
     @Whitelisted
-    public BuildStatus getBuildStatus() throws IOException, InterruptedException {
+    public RemoteBuildStatus getBuildStatus() throws IOException, InterruptedException {
         return getBuildStatus(false);
     }
 
     /**
      * Gets the build status of the remote build and <b>blocks</b> until it finished.
      *
-     * @return {@link org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.BuildStatus} the build status
+     * @return {@link org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.RemoteBuildStatus} the build status
      * @throws IOException
      *            if there is an error retrieving the remote build number, or,
      *            if there is an error retrieving the remote build status, or,
@@ -283,18 +283,18 @@ public class Handle implements Serializable {
      */
     @Nonnull
     @Whitelisted
-    public BuildStatus getBuildStatusBlocking() throws IOException, InterruptedException {
+    public RemoteBuildStatus getBuildStatusBlocking() throws IOException, InterruptedException {
         return getBuildStatus(true);
     }
 
     @Nonnull
-    private BuildStatus getBuildStatus(boolean blockUntilFinished) throws IOException, InterruptedException {
+    private RemoteBuildStatus getBuildStatus(boolean blockUntilFinished) throws IOException, InterruptedException {
       //Return if buildStatus exists and is final (does not change anymore)
-      if(buildInfo.getStatus() == BuildStatus.FINISHED) return buildInfo.getStatus();
+      if(buildInfo.getStatus() == RemoteBuildStatus.FINISHED) return buildInfo.getStatus();
 
       PrintStreamWrapper log = new PrintStreamWrapper();
       try {
-          while(buildInfo.getStatus() != BuildStatus.FINISHED) {
+          while(buildInfo.getStatus() != RemoteBuildStatus.FINISHED) {
               //TODO: This currently blocks
               BuildData buildData = getBuildData(queueId, log.getPrintStream());
               String jobLocation = buildData.getURL() + "api/json/";
@@ -308,7 +308,7 @@ public class Handle implements Serializable {
       }
     }
 
-    public void setBuildInfo(BuildInfo buildInfo)
+    public void setBuildInfo(RemoteBuildInfo buildInfo)
     {
         this.buildInfo = buildInfo;
     }

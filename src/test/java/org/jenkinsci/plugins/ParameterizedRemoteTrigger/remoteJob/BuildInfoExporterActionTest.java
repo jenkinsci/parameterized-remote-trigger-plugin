@@ -40,7 +40,7 @@ public class BuildInfoExporterActionTest {
     @Test
     public void testAddBuildInfoExporterAction_sequential() throws IOException {
         Run<?, ?> parentBuild = new FreeStyleBuild(new FreeStyleProject((ItemGroup<TopLevelItem>) Jenkins.getInstance(), "ParentJob"));
-        BuildInfo buildInfo = new BuildInfo(Result.SUCCESS);
+        RemoteBuildInfo buildInfo = new RemoteBuildInfo(Result.SUCCESS);
         for (int i = 1; i <= PARALLEL_JOBS; i++) {
             BuildInfoExporterAction.addBuildInfoExporterAction(parentBuild, "Job" + i, i, new URL("http://jenkins/jobs/Job" + i), buildInfo);
         }
@@ -137,7 +137,7 @@ public class BuildInfoExporterActionTest {
 
         public Boolean call() throws MalformedURLException {
             String jobName = "Job" + i;
-            BuildInfo buildInfo = new BuildInfo(Result.SUCCESS);
+            RemoteBuildInfo buildInfo = new RemoteBuildInfo(Result.SUCCESS);
             BuildInfoExporterAction.addBuildInfoExporterAction(parentBuild, jobName, i,
                     new URL("http://jenkins/jobs/Job" + i), buildInfo);
             System.out.println("AddActionCallable finished for Job" + i);

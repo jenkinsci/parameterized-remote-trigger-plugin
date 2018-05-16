@@ -16,8 +16,8 @@ public class BuildInfoTest {
     @Test
     public void buildStatusTest() {
 
-        BuildInfo buildInfo = new BuildInfo(BuildStatus.NOT_STARTED);
-        assert(buildInfo.getStatus() == BuildStatus.NOT_STARTED);
+        RemoteBuildInfo buildInfo = new RemoteBuildInfo(RemoteBuildStatus.NOT_STARTED);
+        assert(buildInfo.getStatus() == RemoteBuildStatus.NOT_STARTED);
         assert(buildInfo.getResult() == Result.NOT_BUILT);
     }
 
@@ -28,32 +28,32 @@ public class BuildInfoTest {
         thrown.expectMessage("It is not possible to set the status to finished without setting the build result. "
                 + "Please use BuildInfo(Result result) or BuildInfo(String result) in order to set the status to finished.");
 
-        new BuildInfo(BuildStatus.FINISHED);
+        new RemoteBuildInfo(RemoteBuildStatus.FINISHED);
     }
 
     @Test
     public void buildResultTest() {
 
-        BuildInfo buildInfo = new BuildInfo(Result.SUCCESS);
-        assert(buildInfo.getStatus() == BuildStatus.FINISHED);
+        RemoteBuildInfo buildInfo = new RemoteBuildInfo(Result.SUCCESS);
+        assert(buildInfo.getStatus() == RemoteBuildStatus.FINISHED);
         assert(buildInfo.getResult() == Result.SUCCESS);
     }
 
     @Test
     public void stringBuildResultTest() {
 
-        BuildInfo buildInfo = new BuildInfo("SUCCESS");
-        assert(buildInfo.getStatus() == BuildStatus.FINISHED);
+        RemoteBuildInfo buildInfo = new RemoteBuildInfo("SUCCESS");
+        assert(buildInfo.getStatus() == RemoteBuildStatus.FINISHED);
         assert(buildInfo.getResult() == Result.SUCCESS);
     }
 
     @Test
     public void buildInfoTest() {
 
-        BuildInfo buildInfo = new BuildInfo(BuildStatus.NOT_STARTED);
+        RemoteBuildInfo buildInfo = new RemoteBuildInfo(RemoteBuildStatus.NOT_STARTED);
         assert(buildInfo.toString().equals("status=NOT_STARTED"));
 
-        buildInfo = new BuildInfo(Result.SUCCESS);
+        buildInfo = new RemoteBuildInfo(Result.SUCCESS);
         assert(buildInfo.toString().equals("status=FINISHED, result=SUCCESS"));
     }
 }

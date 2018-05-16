@@ -10,27 +10,27 @@ import hudson.model.Result;
  * Remote build info, containing build status and build result.
  *
  */
-public class BuildInfo implements Serializable
+public class RemoteBuildInfo implements Serializable
 {
     private static final long serialVersionUID = -5177308623227407314L;
 
     @Nonnull
-    private BuildStatus status;
+    private RemoteBuildStatus status;
 
     @Nonnull
     private Result result;
 
 
-    public BuildInfo()
+    public RemoteBuildInfo()
     {
-        status = BuildStatus.NOT_STARTED;
+        status = RemoteBuildStatus.NOT_STARTED;
         result = Result.NOT_BUILT;
     }
 
-    public BuildInfo(BuildStatus status)
+    public RemoteBuildInfo(RemoteBuildStatus status)
     {
         this.status = status;
-        if (status == BuildStatus.FINISHED) {
+        if (status == RemoteBuildStatus.FINISHED) {
             throw new IllegalArgumentException("It is not possible to set the status to finished without setting the build result. "
                     + "Please use BuildInfo(Result result) or BuildInfo(String result) in order to set the status to finished.");
         } else {
@@ -38,19 +38,19 @@ public class BuildInfo implements Serializable
         }
     }
 
-    public BuildInfo(Result result)
+    public RemoteBuildInfo(Result result)
     {
-        this.status = BuildStatus.FINISHED;
+        this.status = RemoteBuildStatus.FINISHED;
         this.result = result;
     }
 
-    public BuildInfo(String result)
+    public RemoteBuildInfo(String result)
     {
-        this.status = BuildStatus.FINISHED;
+        this.status = RemoteBuildStatus.FINISHED;
         this.result = Result.fromString(result);
     }
 
-    public BuildStatus getStatus()
+    public RemoteBuildStatus getStatus()
     {
         return status;
     }
@@ -63,7 +63,7 @@ public class BuildInfo implements Serializable
     @Override
     public String toString()
     {
-        if (status == BuildStatus.FINISHED) return String.format("status=%s, result=%s", status.toString(), result.toString());
+        if (status == RemoteBuildStatus.FINISHED) return String.format("status=%s, result=%s", status.toString(), result.toString());
         else return String.format("status=%s", status.toString());
     }
 
