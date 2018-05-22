@@ -18,7 +18,7 @@ public class BuildInfoTest {
 
         RemoteBuildInfo buildInfo = new RemoteBuildInfo();
 
-        assert(buildInfo.getStatus() == RemoteBuildStatus.NOT_STARTED);
+        assert(buildInfo.isNotStarted());
         assert(buildInfo.getResult() == Result.NOT_BUILT);
     }
 
@@ -39,7 +39,7 @@ public class BuildInfoTest {
         RemoteBuildInfo buildInfo = new RemoteBuildInfo();
         buildInfo.setBuildResult(Result.SUCCESS);
 
-        assert(buildInfo.getStatus() == RemoteBuildStatus.FINISHED);
+        assert(buildInfo.isFinished());
         assert(buildInfo.getResult() == Result.SUCCESS);
     }
 
@@ -49,7 +49,7 @@ public class BuildInfoTest {
         RemoteBuildInfo buildInfo = new RemoteBuildInfo();
         buildInfo.setBuildResult(Result.SUCCESS);
 
-        assert(buildInfo.getStatus() == RemoteBuildStatus.FINISHED);
+        assert(buildInfo.isFinished());
         assert(buildInfo.getResult() == Result.SUCCESS);
     }
 

@@ -109,4 +109,23 @@ public class RemoteBuildInfo implements Serializable
         else return String.format("queueStatus=%s, status=%s", queueStatus.toString(), status.toString());
     }
 
+    public boolean isNotQueued() {
+        return queueStatus == RemoteBuildQueueStatus.NOT_QUEUED;
+    }
+
+    public boolean isQueued() {
+        return queueStatus == RemoteBuildQueueStatus.QUEUED;
+    }
+
+    public boolean isNotStarted() {
+        return status == RemoteBuildStatus.NOT_STARTED;
+    }
+
+    public boolean isRunning() {
+        return status == RemoteBuildStatus.RUNNING;
+    }
+
+    public boolean isFinished() {
+        return status == RemoteBuildStatus.FINISHED;
+    }
 }

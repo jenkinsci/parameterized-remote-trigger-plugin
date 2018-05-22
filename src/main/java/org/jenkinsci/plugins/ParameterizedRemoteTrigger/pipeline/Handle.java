@@ -20,7 +20,6 @@ import org.jenkinsci.plugins.ParameterizedRemoteTrigger.RemoteBuildConfiguration
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.RemoteJenkinsServer;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.BuildData;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.RemoteBuildInfo;
-import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.RemoteBuildQueueStatus;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob.RemoteBuildStatus;
 import org.jenkinsci.plugins.scriptsecurity.sandbox.whitelists.Whitelisted;
 
@@ -103,7 +102,7 @@ public class Handle implements Serializable {
      */
     @Whitelisted
     public boolean isQueued() throws IOException, InterruptedException {
-        return buildInfo.getQueueStatus() == RemoteBuildQueueStatus.QUEUED;
+        return buildInfo.isQueued();
     }
 
     /**
@@ -120,7 +119,7 @@ public class Handle implements Serializable {
      */
     @Whitelisted
     public boolean isFinished() throws IOException, InterruptedException {
-        return buildInfo.getStatus() == RemoteBuildStatus.FINISHED;
+        return buildInfo.isFinished();
     }
 
     /**
@@ -254,11 +253,11 @@ public class Handle implements Serializable {
     @Nonnull
     private RemoteBuildStatus updateBuildStatus(boolean blockUntilFinished) throws IOException, InterruptedException {
       //Return if buildStatus exists and is final (does not change anymore)
-      if(buildInfo.getStatus() == RemoteBuildStatus.FINISHED) return buildInfo.getStatus();
+      if(buildInfo.isFinished()) return buildInfo.getStatus();
 
       PrintStreamWrapper log = new PrintStreamWrapper();
       try {
-          while(buildInfo.getStatus() != RemoteBuildStatus.FINISHED) {
+          while(!buildInfo.isFinished()) {
               BuildContext context = new BuildContext(log.getPrintStream(), effectiveRemoteServer, this.currentItem);
               buildInfo = remoteBuildConfiguration.updateBuildInfo(buildInfo, context);
               if(!blockUntilFinished) break;

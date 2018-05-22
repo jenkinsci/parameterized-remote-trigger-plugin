@@ -733,11 +733,11 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
         }
         context.logger.println("  Remote job queue number: " + buildInfo.getQueueId());
 
-        if (buildInfo.getQueueStatus() == RemoteBuildQueueStatus.QUEUED) {
+        if (buildInfo.isQueued()) {
             context.logger.println("Waiting for remote build to be executed...");
         }
 
-        while (buildInfo.getQueueStatus() == RemoteBuildQueueStatus.QUEUED)
+        while (buildInfo.isQueued())
         {
             context.logger.println("Waiting for " + this.pollInterval + " seconds until next poll.");
             Thread.sleep(this.pollInterval * 1000);
@@ -765,11 +765,11 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
           buildInfo = updateBuildInfo(buildInfo, context);
           handle.setBuildInfo(buildInfo);
 
-          if (buildInfo.getStatus() == RemoteBuildStatus.NOT_STARTED)
+          if (buildInfo.isNotStarted())
             context.logger.println("Waiting for remote build to start ...");
 
-          while (buildInfo.getStatus() == RemoteBuildStatus.NOT_STARTED) {
-            context.logger.println("  Waiting for " + this.pollInterval + " seconds until next poll.");
+          while (buildInfo.isNotStarted()) {
+              context.logger.println("  Waiting for " + this.pollInterval + " seconds until next poll.");
               // Sleep for 'pollInterval' seconds.
               // Sleep takes miliseconds so need to convert this.pollInterval to milisecopnds (x 1000)
               try {
@@ -782,13 +782,13 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
               handle.setBuildInfo(buildInfo);
           }
 
-          if (buildInfo.getStatus() == RemoteBuildStatus.RUNNING) {
-            context.logger.println("Remote build started!");
-            context.logger.println("Waiting for remote build to finish ...");
+          if (buildInfo.isRunning()) {
+              context.logger.println("Remote build started!");
+              context.logger.println("Waiting for remote build to finish ...");
           }
 
-          while (buildInfo.getStatus() == RemoteBuildStatus.RUNNING) {
-            context.logger.println("  Waiting for " + this.pollInterval + " seconds until next poll.");
+          while (buildInfo.isRunning()) {
+              context.logger.println("  Waiting for " + this.pollInterval + " seconds until next poll.");
               // Sleep for 'pollInterval' seconds.
               // Sleep takes miliseconds so need to convert this.pollInterval to milisecopnds (x 1000)
               try {
@@ -874,9 +874,9 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
     @Nonnull
     public RemoteBuildInfo updateBuildInfo(@Nonnull RemoteBuildInfo buildInfo, @Nonnull BuildContext context) throws IOException {
 
-        if (buildInfo.getQueueStatus() == RemoteBuildQueueStatus.NOT_QUEUED) return buildInfo;
+        if (buildInfo.isNotQueued()) return buildInfo;
 
-        if (buildInfo.getQueueStatus() == RemoteBuildQueueStatus.QUEUED) {
+        if (buildInfo.isQueued()) {
             String queueId = buildInfo.getQueueId();
             if (queueId == null) {
                 throw new AbortException(String.format("Unexpected status: %s. The queue id was not found.", buildInfo.toString()));
