@@ -8,7 +8,9 @@ import javax.annotation.Nonnull;
 import hudson.model.Result;
 
 /**
- * Remote build info, containing build status and build result.
+ * The remote build info contains the queue id and the queue status of the remote build,
+ * while it enters the queue, and the remote job build number, build url, build status and build result,
+ * when it leaves the queue.
  *
  */
 public class RemoteBuildInfo implements Serializable

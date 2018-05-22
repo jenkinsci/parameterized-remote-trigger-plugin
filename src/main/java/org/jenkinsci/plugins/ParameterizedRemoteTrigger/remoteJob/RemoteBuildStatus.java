@@ -7,17 +7,17 @@ public enum RemoteBuildStatus
 {
 
     /**
-     * Nothing started yet, neither QUEUED nor RUNNING
+     * The remote build did not start.
      */
     NOT_STARTED("NOT_STARTED"),
 
     /**
-     * The build is RUNNING currently.
+     * The remote build is running currently.
      */
     RUNNING("RUNNING"),
 
     /**
-     * The build is RUNNING currently.
+     * The remote build is finished.
      */
     FINISHED("FINISHED");
 

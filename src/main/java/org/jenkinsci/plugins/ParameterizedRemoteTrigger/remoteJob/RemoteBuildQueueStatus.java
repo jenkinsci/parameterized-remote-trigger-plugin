@@ -11,12 +11,12 @@ public enum RemoteBuildQueueStatus
     NOT_QUEUED("NOT_QUEUED"),
 
     /**
-     * The remote job is on the queue.
+     * The remote job was triggered and it is on the queue waiting to be executed.
      */
     QUEUED("QUEUED"),
 
     /**
-     * The remote job is being executed.
+     * The remote job was executed.
      */
     EXECUTED("EXECUTED");
 
