@@ -1034,7 +1034,7 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
      *            if the request fails due to an unknown host or unauthorized credentials, or
      *            if the request fails due to another reason and the number of attempts is exceeded.
      */
-    private ConnectionResponse sendHTTPCall(String urlString, String requestType, BuildContext context, int numberOfAttempts)
+    public ConnectionResponse sendHTTPCall(String urlString, String requestType, BuildContext context, int numberOfAttempts)
             throws IOException {
 
         int retryLimit = this.getConnectionRetryLimit();
