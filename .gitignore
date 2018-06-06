@@ -17,3 +17,9 @@ release.properties
 target
 *.releaseBackup
 *.swp
+
+# IntelliJ project files
+*.iml
+*.ipr
+*.iws
+.idea/

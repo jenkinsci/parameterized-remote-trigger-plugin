@@ -21,6 +21,9 @@ public class ConnectionResponse
     @Nullable @CheckForNull
     private final JSONObject body;
 
+    @Nullable @CheckForNull
+    private final String rawBody;
+
     @Nonnull
     private final int responseCode;
 
@@ -29,13 +32,15 @@ public class ConnectionResponse
     {
         this.header = header;
         this.body = body;
+        this.rawBody = null;
         this.responseCode = responseCode;
     }
 
-    public ConnectionResponse(@Nonnull Map<String, List<String>> header, @Nonnull int responseCode)
+    public ConnectionResponse(@Nonnull Map<String, List<String>> header, @Nullable String body, @Nonnull int responseCode)
     {
         this.header = header;
         this.body = null;
+        this.rawBody = body;
         this.responseCode = responseCode;
     }
 
@@ -46,6 +51,10 @@ public class ConnectionResponse
 
     public JSONObject getBody() {
         return body;
+    }
+
+    public String getRawBody() {
+        return rawBody;
     }
 
     public int getResponseCode() {
