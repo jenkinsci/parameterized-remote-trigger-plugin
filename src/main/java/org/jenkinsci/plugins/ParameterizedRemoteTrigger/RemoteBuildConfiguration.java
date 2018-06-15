@@ -1001,7 +1001,7 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
      *            if the request fails due to an unknown host or unauthorized credentials, or
      *            if the request fails due to another reason and the number of attempts is exceeded.
      */
-    private ConnectionResponse sendHTTPCall(String urlString, String requestType, BuildContext context, int numberOfAttempts)
+    public ConnectionResponse sendHTTPCall(String urlString, String requestType, BuildContext context, int numberOfAttempts)
             throws IOException {
 
         int retryLimit = this.getConnectionRetryLimit();
@@ -1039,8 +1039,9 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
                 //Seems like in Jenkins version 1.547, when using "/build" (job API for non-parameterized jobs), it returns a string indicating the status.
                 //But in newer versions of Jenkins, it just returns an empty response.
                 //So we need to compensate and check for both.
+                //In case of a non-JSON response, save the response as a raw String, to download other data types
                 if ( responseCode >= 400 || JSONUtils.mayBeJSON(response) == false) {
-                    return new ConnectionResponse(responseHeader, responseCode);
+                    return new ConnectionResponse(responseHeader, response, responseCode);
                 } else {
                     responseObject = (JSONObject) JSONSerializer.toJSON(response);
                 }
