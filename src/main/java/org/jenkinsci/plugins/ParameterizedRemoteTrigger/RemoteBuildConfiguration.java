@@ -786,7 +786,7 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
           }
 
           // If build did not finish with 'success' or 'unstable' then fail build step.
-          if (buildInfo.getResult() != Result.SUCCESS && buildInfo.getResult() != Result.UNSTABLE)) {
+          if (buildInfo.getResult() != Result.SUCCESS && buildInfo.getResult() != Result.UNSTABLE) {
               // failBuild will check if the 'shouldNotFailBuild' parameter is set or not, so will decide how to
               // handle the failure.
               this.failBuild(new Exception("The remote job did not succeed."), context.logger);
