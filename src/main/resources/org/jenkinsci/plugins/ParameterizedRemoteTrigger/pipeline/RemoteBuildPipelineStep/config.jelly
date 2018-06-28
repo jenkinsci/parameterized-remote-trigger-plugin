@@ -15,6 +15,9 @@
     </f:section>
 
     <f:section title="Job Info">
+        <f:entry title="Do not fail if remote fails" field="shouldNotFailBuild">
+            <f:checkbox />
+        </f:entry>
 
         <f:entry title="Wait to trigger remote builds until no other builds are running." field="preventRemoteBuildQueue">
             <f:checkbox />
