@@ -15,7 +15,11 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Semaphore;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import javax.annotation.CheckForNull;
@@ -103,8 +107,10 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
 	private boolean enhancedLogging;
 	private boolean loadParamsFromFile;
 	private String parameterFile;
+	private int maxConn;
+	private Map<String, Semaphore> hostLocks = new HashMap<>();
+	private Map<String, Integer> hostPermits = new HashMap<>();
 
-	@SuppressWarnings("unused")
 	private static Logger logger = Logger.getLogger(RemoteBuildConfiguration.class.getName());
 
 	@DataBoundConstructor
@@ -128,6 +134,11 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
 		}
 		auth = null;
 		return this;
+	}
+
+	@DataBoundSetter
+	public void setMaxConn(int maxConn) {
+		this.maxConn = (maxConn > 5) ? 5 : maxConn;
 	}
 
 	@DataBoundSetter
@@ -364,7 +375,33 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
 							+ " remote host (remoteJenkinsName:'%s') nor 'Override remote host URL' (remoteJenkinsUrl:'%s').",
 					expandedJob, this.remoteJenkinsName, this.remoteJenkinsUrl));
 		}
+
+		try {
+			URL url = new URL(server.getAddress());
+			Semaphore s = hostLocks.get(url.getHost());
+			Integer lastPermit = hostPermits.get(url.getHost());
+			int maxConn = getMaxConn();
+			if (s == null || lastPermit == null || maxConn != lastPermit) {
+				s = new Semaphore(maxConn);
+				hostLocks.put(url.getHost(), s);
+				hostPermits.put(url.getHost(), maxConn);
+			}
+		} catch (Exception e) {
+			logger.log(Level.WARNING, "Failed to setup resource lock", e);
+		}
+
 		return server;
+	}
+
+	private Semaphore getLock(String addr) {
+		Semaphore s = null;
+		try {
+			URL url = new URL(addr);
+			s = hostLocks.get(url.getHost());
+		} catch (Exception e) {
+			logger.log(Level.WARNING, "Failed to setup resource lock", e);
+		}
+		return s;
 	}
 
 	/**
@@ -544,12 +581,12 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
 		context.logger.println("Triggering remote job now.");
 
 		try {
-			ConnectionResponse responseRemoteJob = HttpHelper.post(triggerUrlString, context, cleanedParams,
-					this.getPollInterval(), this.getConnectionRetryLimit(), this.getAuth2());
+			ConnectionResponse responseRemoteJob = HttpHelper.tryPost(triggerUrlString, context, cleanedParams,
+					this.getPollInterval(), this.getConnectionRetryLimit(), this.getAuth2(), getLock(triggerUrlString));
 			QueueItem queueItem = new QueueItem(responseRemoteJob.getHeader());
 			buildInfo.setQueueId(queueItem.getId());
 			buildInfo = updateBuildInfo(buildInfo, context);
-		} catch (IOException|InterruptedException e) {
+		} catch (IOException | InterruptedException e) {
 			this.failBuild(e, context.logger);
 		}
 
@@ -747,8 +784,8 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
 
 	private String getConsoleOutput(URL url, BuildContext context) throws IOException, InterruptedException {
 		URL buildUrl = new URL(url, "consoleText");
-		return HttpHelper.getRawResp(buildUrl.toString(), HttpHelper.HTTP_GET, context, null, 1, this.getPollInterval(),
-				this.getConnectionRetryLimit(), this.getAuth2());
+		return HttpHelper.tryGetRawResp(buildUrl.toString(), context, this.getPollInterval(),
+				this.getConnectionRetryLimit(), this.getAuth2(), getLock(buildUrl.toString()));
 	}
 
 	/**
@@ -766,8 +803,8 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
 	 * 				if any HTTP error occurred.
 	 */
 	public ConnectionResponse doGet(String urlString, BuildContext context) throws IOException, InterruptedException {
-		return HttpHelper.get(urlString, context, this.getPollInterval(), this.getConnectionRetryLimit(),
-				this.getAuth2());
+		return HttpHelper.tryGet(urlString, context, this.getPollInterval(), this.getConnectionRetryLimit(),
+				this.getAuth2(), getLock(urlString));
 	}
 
 	private void logAuthInformation(BuildContext context) throws IOException {
@@ -823,6 +860,10 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
 		context.logger.println(String.format("    - connectionRetryLimit:    %s", _connectionRetryLimit));
 		context.logger.println(
 				"################################################################################################################");
+	}
+
+	public int getMaxConn() {
+		return maxConn;
 	}
 
 	/**

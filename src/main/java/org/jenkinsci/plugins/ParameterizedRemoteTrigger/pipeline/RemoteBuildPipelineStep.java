@@ -72,6 +72,15 @@ public class RemoteBuildPipelineStep extends Step {
         remoteBuildConfig.setShouldNotFailBuild(false);     //We need to get notified. Failure feedback is collected async then.
         remoteBuildConfig.setBlockBuildUntilComplete(true); //default for Pipeline Step
     }
+    
+    @DataBoundSetter
+    public void setMaxConn(int maxConn) {
+    	remoteBuildConfig.setMaxConn(maxConn);
+    }
+    
+    public int getMaxConn() {
+    	return remoteBuildConfig.getMaxConn();
+    }
 
     @DataBoundSetter
     public void setAuth(Auth2 auth) {

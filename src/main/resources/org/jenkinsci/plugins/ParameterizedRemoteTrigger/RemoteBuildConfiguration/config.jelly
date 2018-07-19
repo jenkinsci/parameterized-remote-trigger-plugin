@@ -41,6 +41,10 @@
         <f:entry title="Parameters" field="parameters">
             <f:textarea />
         </f:entry>
+        
+        <f:entry title="Max connection" field="maxConn">
+            <f:textbox default="1" />
+        </f:entry>
 
         <f:entry title="Enable enhanced logging" field="enhancedLogging">
             <f:checkbox />

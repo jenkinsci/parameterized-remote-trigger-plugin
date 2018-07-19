@@ -22,6 +22,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -365,15 +367,6 @@ public class HttpHelper {
 		return triggerUrlString;
 	}
 
-	public static String getRawResp(String urlString, String requestType, BuildContext context,
-			Collection<String> postParams, int numberOfAttempts, int pollInterval, int retryLimit, Auth2 overrideAuth)
-			throws IOException, InterruptedException {
-		StringBuilder resp = new StringBuilder();
-		sendHTTPCall(urlString, requestType, context, postParams, numberOfAttempts, pollInterval, retryLimit,
-				overrideAuth, resp);
-		return resp.toString();
-	}
-
 	/**
 	 * Same as sendHTTPCall, but keeps track of the number of failed connection
 	 * attempts (aka: the number of times this method has been called). In the case
@@ -392,7 +385,7 @@ public class HttpHelper {
 	 * @param numberOfAttempts
 	 *            number of time that the connection has been attempted
 	 * @param pollInterval
-	 *            interval between each retry
+	 *            interval between each retry in second
 	 * @param retryLimit
 	 *            the retry uplimit
 	 * @param overrideAuth
@@ -406,7 +399,7 @@ public class HttpHelper {
 	 * 				if any thread has interrupted the current thread.
 	 * 				
 	 */
-	public static ConnectionResponse sendHTTPCall(String urlString, String requestType, BuildContext context,
+	private static ConnectionResponse sendHTTPCall(String urlString, String requestType, BuildContext context,
 			Collection<String> postParams, int numberOfAttempts, int pollInterval, int retryLimit, Auth2 overrideAuth,
 			StringBuilder rawRespRef) throws IOException, InterruptedException {
 
@@ -520,13 +513,72 @@ public class HttpHelper {
 		return new ConnectionResponse(responseHeader, responseObject, responseCode);
 	}
 
+	private static ConnectionResponse tryCall(String urlString, String method, BuildContext context,
+			Collection<String> params, int pollInterval, int retryLimit, Auth2 overrideAuth, StringBuilder rawRespRef,
+			Semaphore lock) throws IOException, InterruptedException {
+		if (lock == null) {
+			context.logger.println("calling remote without locking...");
+			return sendHTTPCall(urlString, method, context, null, 1, pollInterval, retryLimit, overrideAuth,
+					rawRespRef);
+		}
+		Boolean isAccquired = null;
+		try {
+			try {
+				isAccquired = lock.tryAcquire(pollInterval, TimeUnit.SECONDS);
+				logger.log(Level.FINE, String.format("calling %s in semaphore...", urlString));
+				context.logger.println("calling remote in semaphore...");
+			} catch (InterruptedException e) {
+				context.logger.println("fail to accquire lock because of interrupt, skip locking...");
+			}
+			if (isAccquired != null && !isAccquired) {
+				context.logger.println("fail to accquire lock because of timeout, skip locking...");
+			}
+
+			ConnectionResponse cr = sendHTTPCall(urlString, method, context, params, 1, pollInterval, retryLimit,
+					overrideAuth, rawRespRef);
+			Thread.sleep(50);
+			return cr;
+
+		} finally {
+			if (isAccquired != null && isAccquired) {
+				lock.release();
+			}
+		}
+	}
+
+	public static ConnectionResponse tryPost(String urlString, BuildContext context, Collection<String> params,
+			int pollInterval, int retryLimit, Auth2 overrideAuth, Semaphore lock)
+			throws IOException, InterruptedException {
+
+		return tryCall(urlString, HTTP_POST, context, params, pollInterval, retryLimit, overrideAuth, null, lock);
+	}
+
+	public static ConnectionResponse tryGet(String urlString, BuildContext context, int pollInterval, int retryLimit,
+			Auth2 overrideAuth, Semaphore lock) throws IOException, InterruptedException {
+		return tryCall(urlString, HTTP_GET, context, null, pollInterval, retryLimit, overrideAuth, null, lock);
+	}
+
+	public static String tryGetRawResp(String urlString, BuildContext context, int pollInterval, int retryLimit,
+			Auth2 overrideAuth, Semaphore lock) throws IOException, InterruptedException {
+		StringBuilder resp = new StringBuilder();
+		tryCall(urlString, HTTP_GET, context, null, pollInterval, retryLimit, overrideAuth, resp, lock);
+		return resp.toString();
+	}
+
 	public static ConnectionResponse post(String urlString, BuildContext context, Collection<String> params,
 			int pollInterval, int retryLimit, Auth2 overrideAuth) throws IOException, InterruptedException {
-		return sendHTTPCall(urlString, HTTP_POST, context, params, 1, pollInterval, retryLimit, overrideAuth, null);
+		return tryPost(urlString, context, params, pollInterval, retryLimit, overrideAuth, null);
 	}
 
 	public static ConnectionResponse get(String urlString, BuildContext context, int pollInterval, int retryLimit,
 			Auth2 overrideAuth) throws IOException, InterruptedException {
-		return sendHTTPCall(urlString, HTTP_GET, context, null, 1, pollInterval, retryLimit, overrideAuth, null);
+		return tryGet(urlString, context, pollInterval, retryLimit, overrideAuth, null);
 	}
+
+	public static String getRawResp(String urlString, String requestType, BuildContext context,
+			Collection<String> postParams, int numberOfAttempts, int pollInterval, int retryLimit, Auth2 overrideAuth)
+			throws IOException, InterruptedException {
+		return tryGetRawResp(urlString, context, pollInterval, retryLimit, overrideAuth, null);
+	}
+
 }
