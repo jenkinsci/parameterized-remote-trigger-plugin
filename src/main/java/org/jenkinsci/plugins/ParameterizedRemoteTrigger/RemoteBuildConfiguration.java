@@ -999,6 +999,14 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
 					}
 				}
 			}
+
+			if (!isParameterized && remoteJobMetadata.getJSONArray("property").size() >= 1) {
+				for (Object obj : remoteJobMetadata.getJSONArray("property")) {
+					if (obj instanceof  JSONObject && ((JSONObject) obj).get("parameterDefinitions") != null) {
+						isParameterized = true;
+					}
+				}
+			}
 		} else {
 			throw new AbortException(
 					"Could not identify if job is parameterized. Job metadata not accessible or with unexpected content.");
