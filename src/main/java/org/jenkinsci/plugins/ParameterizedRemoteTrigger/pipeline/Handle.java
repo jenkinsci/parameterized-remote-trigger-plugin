@@ -358,7 +358,7 @@ public class Handle implements Serializable {
         PrintStreamWrapper log = new PrintStreamWrapper();
         try {
             BuildContext context = new BuildContext(log.getPrintStream(), effectiveRemoteServer, this.currentItem);
-            return remoteBuildConfiguration.doGet(fileUrl.toString(), context);
+            return remoteBuildConfiguration.doGet(fileUrl.toString(), context).getBody();
         } finally {
             lastLog = log.getContent();
         }
