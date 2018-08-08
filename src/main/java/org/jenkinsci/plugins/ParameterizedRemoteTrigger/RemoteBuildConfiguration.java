@@ -3,6 +3,7 @@ package org.jenkinsci.plugins.ParameterizedRemoteTrigger;
 import static org.apache.commons.lang.StringUtils.isEmpty;
 import static org.apache.commons.lang.StringUtils.trimToEmpty;
 import static org.apache.commons.lang.StringUtils.trimToNull;
+import static org.apache.commons.lang.StringUtils.stripAll;
 import static org.jenkinsci.plugins.ParameterizedRemoteTrigger.utils.StringTools.NL;
 
 import java.io.BufferedReader;
@@ -304,7 +305,7 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
 	 */
 	private List<String> getCleanedParameters(List<String> parameters) {
 		List<String> params = new ArrayList<String>(parameters);
-		params = StringUtils.stripAll(params);
+		params = stripAll(params);
 		removeEmptyElements(params);
 		removeCommentsFromParameters(params);
 		return params;
