@@ -239,6 +239,7 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
 		String params = getParameters();
 		if (!params.isEmpty()) {
 			String[] parameterArray = params.split("\n");
+			parameterArray = stripAll(parameterArray);
 			return new ArrayList<String>(Arrays.asList(parameterArray));
 		} else if (loadParamsFromFile) {
 			return loadExternalParameterFile(context);
@@ -305,7 +306,6 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
 	 */
 	private List<String> getCleanedParameters(List<String> parameters) {
 		List<String> params = new ArrayList<String>(parameters);
-		params = stripAll(params);
 		removeEmptyElements(params);
 		removeCommentsFromParameters(params);
 		return params;
