@@ -304,6 +304,7 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
 	 */
 	private List<String> getCleanedParameters(List<String> parameters) {
 		List<String> params = new ArrayList<String>(parameters);
+		params = StringUtils.stripAll(params);
 		removeEmptyElements(params);
 		removeCommentsFromParameters(params);
 		return params;
