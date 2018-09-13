@@ -140,6 +140,12 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
 			}
 		}
 		auth = null;
+		if (hostLocks == null) {
+			hostLocks = new HashMap<>();
+		}
+		if (hostPermits == null) {
+			hostPermits = new HashMap<>();
+		}
 		return this;
 	}
 	
