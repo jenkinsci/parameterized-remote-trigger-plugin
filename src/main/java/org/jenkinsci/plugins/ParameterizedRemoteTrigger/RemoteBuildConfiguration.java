@@ -692,9 +692,13 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
 			context.logger.println("Waiting for remote build to be executed...");
 		}
 
+		int pollIntervalForQueuedItem = this.pollInterval;
+		if (pollIntervalForQueuedItem > DEFAULT_POLLINTERVALL) {
+			pollIntervalForQueuedItem = DEFAULT_POLLINTERVALL;
+		}
 		while (buildInfo.isQueued()) {
-			context.logger.println("Waiting for " + this.pollInterval + " seconds until next poll.");
-			Thread.sleep(this.pollInterval * 1000);
+			context.logger.println("Waiting for " + pollIntervalForQueuedItem + " seconds until next poll.");
+			Thread.sleep(pollIntervalForQueuedItem * 1000);
 			buildInfo = updateBuildInfo(buildInfo, context);
 			handle.setBuildInfo(buildInfo);
 		}
