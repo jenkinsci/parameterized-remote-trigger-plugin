@@ -182,7 +182,7 @@ public class RemoteJenkinsServer extends AbstractDescribableImpl<RemoteJenkinsSe
         public void makeConnectionTrustAllCertificates(HttpsURLConnection conn, boolean trustAllCertificates)
                 throws NoSuchAlgorithmException, KeyManagementException {
             if (trustAllCertificates) {
-                SSLContext ctx = SSLContext.getInstance("TLS");
+                SSLContext ctx = SSLContext.getInstance(SSLContext.getDefault().getProtocol());
                 ctx.init(new KeyManager[0], new TrustManager[]{new NaiveTrustManager()}, new SecureRandom());
                 conn.setSSLSocketFactory(ctx.getSocketFactory());
 
