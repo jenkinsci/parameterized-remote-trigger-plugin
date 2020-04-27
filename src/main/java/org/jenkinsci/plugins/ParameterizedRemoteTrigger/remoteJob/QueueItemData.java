@@ -11,6 +11,7 @@ import org.jenkinsci.plugins.ParameterizedRemoteTrigger.BuildContext;
 
 import net.sf.json.JSONException;
 import net.sf.json.JSONObject;
+import net.sf.json.JSONNull;
 
 /**
  * Contains information about the remote job <b>while is waiting on the queue</b>.
@@ -114,8 +115,8 @@ public class QueueItemData
 
         if (isLeft()) {
             try {
-                JSONObject remoteJobInfo = queueResponse.getJSONObject("executable");
-                if (remoteJobInfo != null) {
+                Object remoteJobInfo = queueResponse.get("executable");
+                if (!(remoteJobInfo instanceof JSONNull)) {
                     try {
                         buildNumber = remoteJobInfo.getInt("number");
                     } catch (JSONException e) {
