@@ -1019,7 +1019,10 @@ public class RemoteBuildConfiguration extends Builder implements SimpleBuildStep
 	}
 
 	public int getMaxConn() {
-		return maxConn;
+		if (maxConn > 0)
+			return maxConn;
+		else
+			return 1;
 	}
 
 	/**
