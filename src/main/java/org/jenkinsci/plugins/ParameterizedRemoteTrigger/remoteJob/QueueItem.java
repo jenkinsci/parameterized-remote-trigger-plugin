@@ -14,7 +14,8 @@ import hudson.AbortException;
  */
 public class QueueItem
 {
-    final static private String key = "Location";
+    final static private String key = "location";
+    final static private String keyCs = "Location";
 
     @Nonnull
     private final String location;
@@ -25,9 +26,14 @@ public class QueueItem
 
     public QueueItem(@Nonnull Map<String,List<String>> header) throws AbortException
     {
-        if (!header.containsKey(key))
-            throw new AbortException(String.format("Error triggering the remote job. The header of the response has an unexpected format: %n%s", header));
-        location = header.get(key).get(0);
+        if (!header.containsKey(key)) {
+            if (!header.containsKey(keyCs))
+                throw new AbortException(String.format("Error triggering the remote job. The header of the response has an unexpected format: %n%s", header));
+            location = header.get(keyCs).get(0);
+        } else {
+            location = header.get(key).get(0);
+        }
+
         try {
             String loc = location.substring(0, location.lastIndexOf('/'));
             id = loc.substring(loc.lastIndexOf('/')+1);
