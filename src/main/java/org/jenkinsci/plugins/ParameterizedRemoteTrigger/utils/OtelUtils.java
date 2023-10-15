@@ -9,7 +9,7 @@ import io.opentelemetry.context.Context;
 import jenkins.model.Jenkins;
 import org.jenkinsci.plugins.workflow.graph.FlowNode;
 import org.jenkinsci.plugins.workflow.steps.StepContext;
-import org.jetbrains.annotations.NotNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 
 import java.util.Optional;
 
@@ -52,13 +52,13 @@ public class OtelUtils {
 				.orElseGet(OtelUtils::noop);
 	}
 
-	@NotNull
+	@NonNull
 	public static AutoCloseable noop() {
 		return () -> {
 		};
 	}
 
-	@NotNull
+	@NonNull
 	public static boolean isOpenTelemetryAvailable() {
 		return Optional.ofNullable(Jenkins.get().getPlugin("opentelemetry"))
 				.map(Plugin::getWrapper)
@@ -66,7 +66,7 @@ public class OtelUtils {
 				.orElse(false);
 	}
 
-	@NotNull
+	@NonNull
 	private static String genTraceParent(Span span) {
 		return TRACE_PARENT_VERSION + "-" + span.getSpanContext().getTraceId() + "-" + span.getSpanContext().getSpanId() + "-" + TRACE_PARENT_TRACE_FLAG;
 	}

@@ -3,20 +3,20 @@
 	<parent>
 		<groupId>org.jenkins-ci.plugins</groupId>
 		<artifactId>plugin</artifactId>
-		<version>4.50</version>
+		<version>4.74</version>
 		<relativePath />
 	</parent>
 
   <properties>
-    <jenkins.version>2.346.3</jenkins.version>
-    <maven.compiler.target>1.8</maven.compiler.target>
-    <maven.compiler.source>1.8</maven.compiler.source>
+    <revision>3.2.1</revision>
+    <changelist>-SNAPSHOT</changelist>
+    <jenkins.version>2.361.4</jenkins.version>
     <!-- https://wiki.jenkins-ci.org/display/JENKINS/Marking+a+new+plugin+version+as+incompatible+with+older+versions -->
     <hpi.compatibleSinceVersion>3.1.6</hpi.compatibleSinceVersion>
   </properties>
 
 	<artifactId>Parameterized-Remote-Trigger</artifactId>
-	<version>3.2.1-SNAPSHOT</version>
+	<version>${revision}${changelist}</version>
 	<packaging>hpi</packaging>
 	<name>Parameterized Remote Trigger Plugin</name>
 	<description>This plugin gives you the ability to trigger parameterized builds on a remote Jenkins server as part of your build.</description>
@@ -51,10 +51,10 @@
 	</build>
 
 	<scm>
-		<connection>scm:git:git://github.com/jenkinsci/parameterized-remote-trigger-tlugin.git</connection>
-		<developerConnection>scm:git:git@github.com:jenkinsci/parameterized-remote-trigger-plugin.git</developerConnection>
-		<url>https://github.com/jenkinsci/parameterized-remote-trigger-plugin</url>
-		<tag>HEAD</tag>
+		<connection>scm:git:https://github.com/jenkinsci/${gitHubRepo}.git</connection>
+		<developerConnection>scm:git:git@github.com:jenkinsci/${gitHubRepo}.git</developerConnection>
+		<url>https://github.com/jenkinsci/${gitHubRepo}</url>
+		<tag>${scmTag}</tag>
 	</scm>
 
 	<repositories>
@@ -75,8 +75,8 @@
 		<dependencies>
 			<dependency>
 				<groupId>io.jenkins.tools.bom</groupId>
-				<artifactId>bom-2.346.x</artifactId>
-				<version>1742.vb_70478c1b_25f</version>
+				<artifactId>bom-2.361.x</artifactId>
+				<version>2102.v854b_fec19c92</version>
 				<scope>import</scope>
 				<type>pom</type>
 			</dependency>
@@ -105,19 +105,24 @@
 			<groupId>io.jenkins.plugins</groupId>
 			<artifactId>opentelemetry</artifactId>
 			<optional>true</optional>
-			<version>2.10.0</version>
+			<version>2.17.0</version>
 		</dependency>
 		<dependency>
 			<groupId>org.mockito</groupId>
 			<artifactId>mockito-core</artifactId>
-			<version>2.18.3</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.mock-server</groupId>
 			<artifactId>mockserver-junit-rule</artifactId>
-			<version>5.14.0</version>
+			<version>5.15.0</version>
 			<scope>test</scope>
+			<exclusions>
+				<exclusion>
+					<groupId>javax.servlet</groupId>
+					<artifactId>javax.servlet-api</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 	</dependencies>
 

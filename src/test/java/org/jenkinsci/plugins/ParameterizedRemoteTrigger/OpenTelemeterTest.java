@@ -7,7 +7,7 @@ import hudson.security.AuthorizationStrategy;
 import hudson.security.SecurityRealm;
 import io.jenkins.plugins.opentelemetry.OpenTelemetryConfiguration;
 import io.jenkins.plugins.opentelemetry.OpenTelemetrySdkProvider;
-import org.jetbrains.annotations.NotNull;
+import edu.umd.cs.findbugs.annotations.NonNull;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;
@@ -55,7 +55,7 @@ public class OpenTelemeterTest {
         mockServerClient.verify(allExpectation);
     }
 
-    @NotNull
+    @NonNull
     private FreeStyleProject createProjectTriggerFrom() throws IOException {
         FreeStyleProject project = jenkinsRule.createFreeStyleProject();
         RemoteBuildConfiguration configuration = new RemoteBuildConfiguration();
@@ -73,7 +73,7 @@ public class OpenTelemeterTest {
         return project;
     }
 
-    @NotNull
+    @NonNull
     private String[] setupRemoteJenkinsMock() {
         Expectation[] metaExp = mockServerClient.when(
                 request()
@@ -166,7 +166,7 @@ public class OpenTelemeterTest {
         return allExp;
     }
 
-    @NotNull
+    @NonNull
     private String createJobUrl() {
         return "http://localhost:" + mockServerClient.getPort() + "/job/remote1";
     }
