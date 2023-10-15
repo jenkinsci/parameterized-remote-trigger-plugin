@@ -8,13 +8,15 @@
 	</parent>
 
   <properties>
+    <revision>3.2.1</revision>
+    <changelist>-SNAPSHOT</changelist>
     <jenkins.version>2.361.4</jenkins.version>
     <!-- https://wiki.jenkins-ci.org/display/JENKINS/Marking+a+new+plugin+version+as+incompatible+with+older+versions -->
     <hpi.compatibleSinceVersion>3.1.6</hpi.compatibleSinceVersion>
   </properties>
 
 	<artifactId>Parameterized-Remote-Trigger</artifactId>
-	<version>3.2.1-SNAPSHOT</version>
+	<version>${revision}${changelist}</version>
 	<packaging>hpi</packaging>
 	<name>Parameterized Remote Trigger Plugin</name>
 	<description>This plugin gives you the ability to trigger parameterized builds on a remote Jenkins server as part of your build.</description>
@@ -49,10 +51,10 @@
 	</build>
 
 	<scm>
-		<connection>scm:git:https://github.com/jenkinsci/parameterized-remote-trigger-tlugin.git</connection>
-		<developerConnection>scm:git:git@github.com:jenkinsci/parameterized-remote-trigger-plugin.git</developerConnection>
-		<url>https://github.com/jenkinsci/parameterized-remote-trigger-plugin</url>
-		<tag>HEAD</tag>
+		<connection>scm:git:https://github.com/jenkinsci/${gitHubRepo}.git</connection>
+		<developerConnection>scm:git:git@github.com:jenkinsci/${gitHubRepo}.git</developerConnection>
+		<url>https://github.com/jenkinsci/${gitHubRepo}</url>
+		<tag>${scmTag}</tag>
 	</scm>
 
 	<repositories>
@@ -108,7 +110,6 @@
 		<dependency>
 			<groupId>org.mockito</groupId>
 			<artifactId>mockito-core</artifactId>
-			<version>5.6.0</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
