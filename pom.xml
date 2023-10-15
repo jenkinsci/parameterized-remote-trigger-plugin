@@ -114,8 +114,14 @@
 		<dependency>
 			<groupId>org.mock-server</groupId>
 			<artifactId>mockserver-junit-rule</artifactId>
-			<version>5.14.0</version>
+			<version>5.15.0</version>
 			<scope>test</scope>
+			<exclusions>
+				<exclusion>
+					<groupId>javax.servlet</groupId>
+					<artifactId>javax.servlet-api</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 	</dependencies>
 
