@@ -9,8 +9,6 @@
 
   <properties>
     <jenkins.version>2.361.4</jenkins.version>
-    <maven.compiler.target>1.8</maven.compiler.target>
-    <maven.compiler.source>1.8</maven.compiler.source>
     <!-- https://wiki.jenkins-ci.org/display/JENKINS/Marking+a+new+plugin+version+as+incompatible+with+older+versions -->
     <hpi.compatibleSinceVersion>3.1.6</hpi.compatibleSinceVersion>
   </properties>
