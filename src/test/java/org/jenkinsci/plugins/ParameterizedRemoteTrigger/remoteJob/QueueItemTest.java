@@ -1,13 +1,13 @@
 package org.jenkinsci.plugins.ParameterizedRemoteTrigger.remoteJob;
 
 import hudson.AbortException;
-import org.eclipse.jetty.server.Response;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.ConnectionResponse;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
+import java.net.HttpURLConnection;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -66,7 +66,7 @@ public class QueueItemTest {
     @Test
     public void test() {
         // ConnectionResponse creates case-insensitive map of header
-        ConnectionResponse connectionResponse = new ConnectionResponse(header, Response.SC_OK);
+        ConnectionResponse connectionResponse = new ConnectionResponse(header, HttpURLConnection.HTTP_OK);
 
         try {
             QueueItem queueItem = new QueueItem(connectionResponse.getHeader());
