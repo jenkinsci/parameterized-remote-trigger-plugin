@@ -11,7 +11,7 @@ public class ExceedRetryLimitException extends IOException {
 
 	@Override
 	public String getMessage() {
-		return "Max number of connection retries have been exeeded.";
+		return "Max number of connection retries have been exceeded.";
 	}
 
 }
