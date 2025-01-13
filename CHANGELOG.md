@@ -1,3 +1,11 @@
+# 3.2.1 (Jan 13th, 2025)
+
+### Improvement
+
+* Upgrade toolset.
+* Update class dependency.
+* Some document refinements.
+
 # 3.2.0 (Sep 5th, 2023)
 
 ### Improvement
