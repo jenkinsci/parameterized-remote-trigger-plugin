@@ -136,7 +136,7 @@ public class Auth extends AbstractDescribableImpl<Auth> implements Serializable 
         public static ListBoxModel doFillCredsItems() {
             StandardUsernameListBoxModel model = new StandardUsernameListBoxModel();
 
-            Item item = Stapler.getCurrentRequest().findAncestorObject(Item.class);
+            Item item = Stapler.getCurrentRequest2().findAncestorObject(Item.class);
 
             List<StandardUsernameCredentials> listOfAllCredentails = CredentialsProvider.lookupCredentials(
                     StandardUsernameCredentials.class, item, ACL.SYSTEM, Collections.<DomainRequirement> emptyList());

@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>org.jenkins-ci.plugins</groupId>
 		<artifactId>plugin</artifactId>
-		<version>4.88</version>
+		<version>5.8</version>
 		<relativePath />
 	</parent>
 
@@ -12,8 +12,8 @@
 		<revision>3.2.2</revision>
 		<changelist>-SNAPSHOT</changelist>
 		<!-- https://www.jenkins.io/doc/developer/plugin-development/choosing-jenkins-baseline/ -->
-		<jenkins.baseline>2.452</jenkins.baseline>
-		<jenkins.version>${jenkins.baseline}.4</jenkins.version>
+		<jenkins.baseline>2.479</jenkins.baseline>
+		<jenkins.version>${jenkins.baseline}.1</jenkins.version>
 		<gitHubRepo>jenkinsci/parameterized-remote-trigger-plugin</gitHubRepo>
 		<!-- https://wiki.jenkins-ci.org/display/JENKINS/Marking+a+new+plugin+version+as+incompatible+with+older+versions -->
 		<hpi.compatibleSinceVersion>3.1.6</hpi.compatibleSinceVersion>
@@ -80,7 +80,7 @@
 			<dependency>
 				<groupId>io.jenkins.tools.bom</groupId>
 				<artifactId>bom-${jenkins.baseline}.x</artifactId>
-				<version>3875.v1df09947cde6</version>
+				<version>3944.v1a_e4f8b_452db_</version>
 				<scope>import</scope>
 				<type>pom</type>
 			</dependency>
