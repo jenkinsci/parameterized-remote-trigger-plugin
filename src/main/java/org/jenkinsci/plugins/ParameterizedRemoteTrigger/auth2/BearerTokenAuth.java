@@ -38,7 +38,7 @@ public class BearerTokenAuth extends Auth2 {
 
     @Override
     public void setAuthorizationHeader(URLConnection connection, BuildContext context) throws IOException {
-        connection.setRequestProperty("Authorization", "Bearer: " + getToken().getPlainText());
+        connection.setRequestProperty("Authorization", "Bearer " + getToken().getPlainText());
     }
 
     @Override
