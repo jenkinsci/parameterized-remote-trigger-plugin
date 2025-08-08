@@ -5,6 +5,7 @@ import static org.apache.commons.lang.StringUtils.trimToEmpty;
 import java.io.Serializable;
 import javax.net.ssl.*;
 import java.net.URL;
+import java.net.URLConnection;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -219,11 +220,13 @@ public class RemoteJenkinsServer extends AbstractDescribableImpl<RemoteJenkinsSe
 
             // check that the host is reachable
             try {
-                HttpsURLConnection conn = (HttpsURLConnection) host.openConnection();
-                try {
-                    makeConnectionTrustAllCertificates(conn, trustAllCertificates);
-                } catch (NoSuchAlgorithmException | KeyManagementException e) {
-                    return FormValidation.error(e, "A key management error occurred.");
+                URLConnection conn = host.openConnection();
+                if (conn instanceof HttpsURLConnection sslConn) {
+                    try {
+                        makeConnectionTrustAllCertificates(sslConn, trustAllCertificates);
+                    } catch (NoSuchAlgorithmException | KeyManagementException e) {
+                        return FormValidation.error(e, "A key management error occurred.");
+                    }
                 }
                 conn.setConnectTimeout(5000);
                 conn.connect();
@@ -234,10 +237,10 @@ public class RemoteJenkinsServer extends AbstractDescribableImpl<RemoteJenkinsSe
                     );
                 }
             } catch (Exception e) {
-                return FormValidation.warning("Address looks good, but a connection could not be established.");
+                return FormValidation.warning(e, "Address looks good, but a connection could not be established.");
             }
 
-            return FormValidation.ok();
+            return FormValidation.ok(host + " is reachable.");
         }
 
         public static List<Auth2Descriptor> getAuth2Descriptors() {
