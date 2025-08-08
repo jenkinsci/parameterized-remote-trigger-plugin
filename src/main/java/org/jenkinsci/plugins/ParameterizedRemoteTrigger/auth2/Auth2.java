@@ -42,6 +42,13 @@ public abstract class Auth2 extends AbstractDescribableImpl<Auth2> implements Se
      */
     public abstract void setAuthorizationHeader(URLConnection connection, BuildContext context) throws IOException;
 
+    /**
+     * Whether a Jenkins crumb is required on {@code POST} requests.
+     */
+    public boolean requiresCrumb() {
+        return true;
+    }
+
     public abstract String toString();
 
     /**
