@@ -48,6 +48,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.BuildContext;
 import org.jenkinsci.plugins.ParameterizedRemoteTrigger.ConnectionResponse;
@@ -194,6 +195,12 @@ public class HttpHelper {
 		}
 	}
 
+	private static String readErrorStream(HttpURLConnection connection) throws IOException {
+		try (InputStream is = connection.getErrorStream()) {
+			return is != null ? IOUtils.toString(is, StandardCharsets.UTF_8) : "";
+		}
+	}
+
 	/**
 	 * Tries to obtain a Jenkins Crumb from the remote Jenkins server.
 	 *
@@ -240,8 +247,8 @@ public class HttpHelper {
 				JenkinsCrumb crumb = new JenkinsCrumb(split[0], split[1]);
 				return DropCachePeriodicWork.safePutCrumb(globalHost, crumb, isCacheEnabled);
 			} else {
-				throw new RuntimeException(String.format("Unexpected response. Response code: %s. Response message: %s",
-						responseCode, connection.getResponseMessage()));
+				throw new RuntimeException(String.format("Unexpected response. Response code: %s (%s)%n%s",
+						responseCode, connection.getResponseMessage(), readErrorStream(connection)));
 			}
 		} catch (FileNotFoundException e) {
 			context.logger.println("CSRF protection is disabled on the remote server.");
@@ -525,9 +532,9 @@ public class HttpHelper {
 			// If we have connectionRetryLimit set to > 0 then retry that many times.
 			if (numberOfAttempts <= retryLimit) {
 				context.logger.println(String.format(
-						"Connection to remote server failed [%s], waiting to retry - %s seconds until next attempt. URL: %s, parameters: %s",
+						"Connection to remote server failed [%s], waiting to retry - %s seconds until next attempt. URL: %s, parameters: %s%n%s",
 						(responseCode == 0 ? e.getMessage() : responseCode), pollInterval,
-						getUrlWithoutParameters(urlString), parmsString));
+						getUrlWithoutParameters(urlString), parmsString, readErrorStream(conn)));
 
 				// Sleep for 'pollInterval' seconds.
 				// Sleep takes milliseconds so need to convert this.pollInterval to milliseconds
@@ -542,9 +549,9 @@ public class HttpHelper {
 
 			} else {
 				context.logger.println(String.format(
-						"Connection to remote server failed [%s], number of retries exceeded. URL: %s, parameters: %s",
+						"Connection to remote server failed [%s], number of retries exceeded. URL: %s, parameters: %s%n%s",
 						(responseCode == 0 ? e.getMessage() : responseCode),
-						getUrlWithoutParameters(urlString), parmsString));
+						getUrlWithoutParameters(urlString), parmsString, readErrorStream(conn)));
 
 				// reached the maximum number of retries, time to fail
 				throw new ExceedRetryLimitException();
