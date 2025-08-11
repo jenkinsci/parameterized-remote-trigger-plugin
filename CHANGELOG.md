@@ -1,3 +1,14 @@
+# 3.2.2 (Aug 12th, 2025)
+
+### Improvements
+* Warn about remote Jenkins URLs ending with a slash. (#98)
+* No need to request a crumb when using API token authentication. (#96)
+
+### Bug fixes
+* Include error stream when reporting unexpected HTTP status codes. (#97)
+* doCheckAddress fixed for http protocol and improved feedback. (#95)
+* Correct bearer token header. (#94)
+
 # 3.2.1 (Jan 13th, 2025)
 
 ### Improvement
