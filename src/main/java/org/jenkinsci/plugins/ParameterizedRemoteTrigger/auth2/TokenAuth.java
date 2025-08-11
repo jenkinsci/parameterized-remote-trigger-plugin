@@ -56,6 +56,11 @@ public class TokenAuth extends Auth2 {
     }
 
     @Override
+    public boolean requiresCrumb() {
+        return false;
+    }
+
+    @Override
     public String toString() {
         return "'" + getDescriptor().getDisplayName() + "' as user '" + getUserName() + "'";
     }
