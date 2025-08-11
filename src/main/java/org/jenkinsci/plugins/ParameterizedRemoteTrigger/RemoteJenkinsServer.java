@@ -210,6 +210,10 @@ public class RemoteJenkinsServer extends AbstractDescribableImpl<RemoteJenkinsSe
                 return FormValidation.warning("The remote address can not be empty, or it must be overridden on the job configuration.");
             }
 
+            if (address.endsWith("/")) {
+                return FormValidation.warning("The remote address is not expected to end with a slash (/).");
+            }
+
             // check if we have a valid, well-formed URL
             try {
                 host = new URL(address);

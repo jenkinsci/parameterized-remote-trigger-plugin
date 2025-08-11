@@ -53,6 +53,7 @@ public class FormValidationUtils
         final String TEXT_WARNING_JOB_VARIABLE = "You are using a variable in the 'Remote Job Name or URL' ('job') field. You have to make sure the value at runtime results in the full job URL";
         final String TEXT_ERROR_NO_URL_AT_ALL = "You have to configure either 'Select a remote host' ('remoteJenkinsName'), 'Override remote host URL' ('remoteJenkinsUrl') or specify a full job URL 'Remote Job Name or URL' ('job')";
 
+        // TODO warn about URLs ending with slash
         if(isEmpty(jobNameOrUrl)) {
             return new RemoteURLCombinationsResult(
                         FormValidation.error("'Remote Job Name or URL' ('job') not specified"),
