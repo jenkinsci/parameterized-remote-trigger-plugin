@@ -1,3 +1,9 @@
+# 3.2.3 (Oct 22nd, 2026)
+
+### Improvements
+* Migrate from Commons Lang 2 to Commons Lang 3. (#100)
+* Test with Java 25 and Java 21. (#99)
+
 # 3.2.2 (Aug 12th, 2025)
 
 ### Improvements
